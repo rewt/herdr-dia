@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Herdr for Dia",
+  "version": "0.1.0",
+  "description": "Review and update the pull requests in your brief with Herdr agents.",
+  "permissions": [
+    "nativeMessaging",
+    "sidePanel",
+    "tabs",
+    "storage"
+  ],
+  "action": {
+    "default_title": "Herdr"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA9GbMYoJUOOkNMYSHMq2SyZZKq4xau2VKlhxYnpkiLHiF0PjM3/ZW/ZF2BwvU3mtMuWY028oWGlyTDh5w5ELrlxeqk9EQmrauqA/3k0gToELUg0TdZbUqo+B/ATO/pTHdpBiM95inqpQYOihY2Y6SdK5MLRfMCbVrjeICQhkMW61OPS9Hy7NAxRjIHpIoVDUqeinYfvS87jYBlUhXYbaly515s4yctuE04EWyxLmh9IMP6YIC9G7Y7CVzrhoWmXmmnL26IW6Xw4U4pNfBKLtYB6o/WIN+cFyWt/yyCT6h5xgHWDoC8oRgAMT/h36prrBTPmc0DM6axEh6/UQWZNBRhQIDAQAB"
+}

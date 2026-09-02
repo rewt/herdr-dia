@@ -1,0 +1,220 @@
+/* Herdr for Dia — panel styling.
+   Tuned toward Dia's own quiet, editorial look: near black-and-white, one restrained
+   accent, hairline rules, soft radii on floating pills and cards. The panel can't read
+   Dia's selected theme (extensions only see prefers-color-scheme), so it tracks light/dark
+   from the OS and stays neutral either way. Dia's display face (Exposure) is proprietary
+   and can't be embedded; the wordmarks use a system serif as a nod to it. */
+:root {
+  --paper: #fbfbfa;
+  --raise: #ffffff;
+  --ink: #16150f;
+  --muted: #6e6c63;
+  --faint: #9a988e;
+  --line: #e7e5df;
+  --line-strong: #d9d7cf;
+  --accent: #4b5d16;          /* muted olive-lime, Dia's accent dialed down for text use */
+  --accent-soft: #eef1e0;
+  --good: #3f7a3f;
+  --warn: #b7791f;
+  --bad: #b23b34;
+  --idle: #b7b5ab;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #100f0d;
+    --raise: #191814;
+    --ink: #eceae2;
+    --muted: #9c9a90;
+    --faint: #6d6b62;
+    --line: #262521;
+    --line-strong: #33322c;
+    --accent: #bcd15f;
+    --accent-soft: #23260f;
+    --good: #7bbf7b;
+    --warn: #d9a441;
+    --bad: #e0645b;
+    --idle: #55534c;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  min-width: 300px;
+  -webkit-font-smoothing: antialiased;
+}
+.wordmark { font-family: Georgia, "Times New Roman", serif; font-weight: 600; letter-spacing: 0.01em; }
+
+header {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  backdrop-filter: saturate(1.1) blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand .wordmark { font-size: 16px; }
+.conn { font-size: 11px; color: var(--faint); }
+.conn.ok { color: var(--good); }
+.conn.bad { color: var(--bad); }
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-radius: 999px; cursor: pointer;
+}
+.icon-btn:hover { color: var(--ink); background: var(--raise); border-color: var(--line); }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+main { padding-bottom: 20px; }
+.card {
+  margin: 12px; padding: 12px 14px;
+  background: var(--raise); border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(20, 21, 15, 0.03);
+}
+.eyebrow {
+  font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 10px;
+}
+.eyebrow .muted, .muted { color: var(--faint); font-weight: 400; }
+
+.pr-title { font-weight: 600; }
+.pr-ref { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--muted); margin: 3px 0 10px; }
+
+textarea, input, select {
+  width: 100%; font: inherit; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line-strong); border-radius: 10px; padding: 8px 10px;
+}
+textarea { resize: vertical; }
+textarea:focus, input:focus, select:focus { outline: none; border-color: var(--accent); }
+select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 15px) center, calc(100% - 10px) center; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 28px; }
+
+.row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+
+/* pills — Dia's floating, fully-rounded buttons */
+.pill {
+  font: inherit; font-weight: 600; font-size: 12.5px;
+  color: var(--paper); background: var(--ink);
+  border: 1px solid var(--ink); border-radius: 999px;
+  padding: 8px 14px; cursor: pointer; white-space: nowrap;
+}
+.pill:hover { transform: translateY(-0.5px); }
+.pill.secondary { color: var(--ink); background: transparent; border-color: var(--line-strong); }
+.pill.secondary:hover { border-color: var(--ink); background: var(--raise); }
+.pill.small { padding: 5px 11px; font-size: 11.5px; }
+.pill:disabled { opacity: 0.4; cursor: default; transform: none; }
+.pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.progress { margin-top: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--muted); white-space: pre-wrap; min-height: 1em; }
+.progress.error { color: var(--bad); }
+.hint { color: var(--muted); font-size: 11.5px; margin: 8px 0 0; }
+.hint.error { color: var(--bad); }
+.empty { color: var(--faint); padding: 4px 2px; }
+
+/* queue */
+.queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.tabbar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.tab { font: inherit; font-size: 12px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 5px 11px; cursor: pointer; white-space: nowrap; }
+.tab:hover { background: var(--raise); }
+.tab.active { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tab .tab-n { font-variant-numeric: tabular-nums; opacity: 0.7; margin-left: 1px; }
+.tab.active .tab-n { opacity: 0.85; }
+.mine-toggle { display: flex; gap: 4px; margin-bottom: 2px; }
+.seg { font: inherit; font-size: 11.5px; color: var(--muted); background: transparent; border: 1px solid var(--line-strong); border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+.seg:hover { border-color: var(--ink); }
+.seg.active { color: var(--paper); background: var(--accent); border-color: var(--accent); }
+.tier-heading { font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--faint); margin-top: 6px; }
+.tier-heading.sub { text-transform: none; letter-spacing: 0; font-family: ui-monospace, Menlo, monospace; color: var(--muted); }
+
+.pr { padding: 9px 11px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
+.pr .head { display: grid; grid-template-columns: 9px 1fr; gap: 9px; align-items: start; }
+.pr .ref { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--faint); }
+.pr .title { font-weight: 600; line-height: 1.35; }
+.state { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 7px; font-size: 11.5px; color: var(--muted); }
+.state .lbl { flex: 1 1 auto; min-width: 8ch; }
+.state .lbl.ready { color: var(--good); font-weight: 600; }
+.pr.other { cursor: pointer; }
+
+/* mine PRs: approval badge + merge button */
+.approval { font-size: 11px; margin-top: 3px; font-weight: 600; }
+.approval.ok { color: var(--good); }
+.approval.changes { color: var(--warn); }
+.approval.pending { color: var(--faint); font-weight: 400; }
+.pill.merge { color: var(--paper); background: var(--good); border-color: var(--good); }
+.pill.merge:disabled { color: var(--muted); background: transparent; border-color: var(--line-strong); opacity: 1; }
+.pill.merge.confirm { background: var(--bad); border-color: var(--bad); }
+
+
+.findings { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.finding { display: grid; grid-template-columns: auto 1fr; gap: 7px; font-size: 11.5px; align-items: baseline; }
+.finding .where { font-family: ui-monospace, Menlo, monospace; color: var(--faint); }
+.sev { font-family: ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; color: var(--paper); background: var(--idle); }
+.sev.high { background: var(--bad); }
+.sev.medium { background: var(--warn); }
+.sev.low { background: var(--idle); }
+
+/* review, read inline */
+.review { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.review .rec { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--accent); margin-bottom: 7px; }
+.review pre { margin: 0; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 11.5px/1.5 ui-monospace, Menlo, monospace; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.review .instruct { display: flex; gap: 6px; margin-top: 9px; }
+.review .instruct input { flex: 1; }
+.review .quick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+
+/* status dots */
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); margin-top: 4px; }
+.dot.working { background: var(--warn); }
+.dot.blocked { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 22%, transparent); }
+.dot.done, .dot.reviewed { background: var(--good); }
+
+/* active board — one collapsible row per session */
+.agents { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.session { border: 1px solid var(--line); border-radius: 12px; background: var(--paper); overflow: hidden; }
+.session-head { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; background: transparent; border: 0; cursor: pointer; text-align: left; color: var(--ink); font: inherit; }
+.session-head:hover { background: var(--raise); }
+.session-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.session-head .dot { margin-top: 0; flex: 0 0 auto; }
+.session-text { display: flex; align-items: baseline; gap: 8px; flex: 1; min-width: 0; }
+.session-text .ref { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--ink); flex: 0 0 auto; }
+.session-status { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-status.ready { color: var(--good); font-weight: 600; }
+.session-head .chev { color: var(--faint); flex: 0 0 auto; font-size: 11px; }
+.session-body { padding: 2px 10px 10px; }
+.session-body .state { margin-top: 4px; }
+
+/* settings sheet */
+[hidden] { display: none !important; }
+.sheet { position: fixed; inset: 0; z-index: 20; background: var(--paper); display: flex; flex-direction: column; }
+.sheet-head { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--paper); }
+.sheet-head .wordmark { font-size: 15px; }
+.sheet-body { padding: 6px 14px 24px; overflow-y: auto; }
+.field { display: block; margin-top: 16px; }
+.field > .label { display: block; font-size: 11px; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 6px; }
+.field-hint { display: block; color: var(--faint); font-size: 11px; margin-top: 6px; line-height: 1.5; }
+.field-hint code, .pr-ref code { font-family: ui-monospace, Menlo, monospace; }
+.field.check { display: flex; align-items: center; gap: 8px; }
+.field.check input { width: auto; }
+.field.check span { color: var(--muted); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.field .row { margin-top: 8px; }
+.field .row input { flex: 1; min-width: 0; }
+.chip { font: inherit; font-size: 11.5px; color: var(--muted); background: var(--raise); border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.chip[aria-pressed="true"] { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.worktrees { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.worktrees .wt { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 7px 9px; background: var(--raise); border: 1px solid var(--line); border-radius: 10px; }
+.worktrees .wt .who { font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+.worktrees .wt .meta { font-size: 10.5px; color: var(--faint); }
+.worktrees .wt .meta.dirty { color: var(--warn); }
+
+@media (prefers-reduced-motion: reduce) { .pill:hover { transform: none; } }

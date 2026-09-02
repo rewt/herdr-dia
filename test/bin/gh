@@ -1,0 +1,81 @@
+#!/usr/bin/env node
+// A fake `gh`, driven by a scenario file (HERDR_DIA_TEST_GH) and logging every invocation
+// (HERDR_DIA_TEST_GH_LOG) so tests can assert both what the host asked GitHub for and the
+// identity it asked with. It answers only the calls host/bridge.mjs actually makes; anything
+// else exits 2 so an unnoticed new call surfaces as a test failure rather than silence.
+
+import fs from 'node:fs';
+
+const argv = process.argv.slice(2);
+const scenario = (() => {
+  try { return JSON.parse(fs.readFileSync(process.env.HERDR_DIA_TEST_GH, 'utf8')); } catch { return {}; }
+})();
+
+if (process.env.HERDR_DIA_TEST_GH_LOG) {
+  try {
+    fs.appendFileSync(process.env.HERDR_DIA_TEST_GH_LOG, `${JSON.stringify({
+      argv, cwd: process.cwd(), ghConfigDir: process.env.GH_CONFIG_DIR || null, quiet: process.env.GH_IDENTITY_QUIET || null,
+    })}\n`);
+  } catch {}
+}
+
+const out = (value) => { process.stdout.write(typeof value === 'string' ? value : `${JSON.stringify(value)}\n`); process.exit(0); };
+const die = (message, code = 1) => { process.stderr.write(`${message}\n`); process.exit(code); };
+const has = (flag) => argv.includes(flag);
+const after = (flag) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : null; };
+
+// A scenario can make any of these fail: { "fail": { "notifications": "gone away" } }
+const failure = (key) => scenario.fail?.[key];
+
+const [command, sub] = argv;
+
+if (command === 'api') {
+  const target = argv.find((a) => !a.startsWith('-') && a !== 'api');
+
+  if (target?.startsWith('notifications?')) {
+    if (failure('notifications')) die(failure('notifications'));
+    out(scenario.notifications || []);
+  }
+  if (has('-X') && after('-X') === 'PATCH' && target?.startsWith('notifications/threads/')) {
+    if (failure('markRead')) die(failure('markRead'));
+    out('');
+  }
+  if (target === 'graphql') {
+    if (failure('graphql')) die(failure('graphql'));
+    const query = (argv.find((a) => a.startsWith('query=')) || '').slice('query='.length);
+    if (scenario.assertGraphqlContains && !query.includes(scenario.assertGraphqlContains)) die(`query missing ${scenario.assertGraphqlContains}`);
+    out({ data: { search: { nodes: scenario.mine || [] } } });
+  }
+  if (target?.startsWith('users/')) {
+    const login = target.slice('users/'.length);
+    const user = (scenario.users || {})[login];
+    if (!user) die(`gh: Not Found (HTTP 404)`);
+    out({ login: user.login, name: user.name ?? null, type: user.type ?? 'User' });
+  }
+  const repoMatch = /^repos\/([^/]+)\/([^/]+)$/.exec(target || '');
+  if (repoMatch) {
+    if (failure('repo')) die(failure('repo'));
+    const settings = scenario.repoSettings || { allow_squash_merge: true, allow_merge_commit: true, allow_rebase_merge: true };
+    out({ squash: Boolean(settings.allow_squash_merge), merge: Boolean(settings.allow_merge_commit), rebase: Boolean(settings.allow_rebase_merge) });
+  }
+  die(`fake gh: unhandled api call ${argv.join(' ')}`, 2);
+}
+
+if (command === 'search' && sub === 'prs') {
+  if (has('--author=@me')) {
+    if (failure('mineRest')) die(failure('mineRest'));
+    out(scenario.mineRest || []);
+  }
+  if (has('--review-requested=@me')) {
+    if (failure('requested')) die(failure('requested'));
+    out(scenario.requested || []);
+  }
+  die(`fake gh: unhandled search ${argv.join(' ')}`, 2);
+}
+
+if (command === 'pr' && sub === 'merge') {
+  if (scenario.mergeError) die(scenario.mergeError);
+  out(`${scenario.mergeOutput || 'Merged pull request'}\n`);
+}
+
+die(`fake gh: unhandled command ${argv.join(' ')}`, 2);

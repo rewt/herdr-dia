@@ -1,0 +1,121 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Herdr</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="wordmark">herdr</span>
+      <span id="conn" class="conn">connecting…</span>
+    </div>
+    <button id="gear" class="icon-btn" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11.5 2h-3l-.4 2.1a6 6 0 0 0-1.3.8L4.7 4 2.2 6.3l1 1.9a6 6 0 0 0-.3 1.5L1 10.5v3l1.9.8q.3.8.7 1.5l-.9 1.8 2.3 2.4 1.9-1q.6.4 1.3.6L8.5 22h3l.4-2.1q.7-.2 1.3-.6l1.9 1 2.3-2.4-.9-1.8q.4-.7.7-1.5l1.9-.8v-3l-1.9-.8a6 6 0 0 0-.3-1.5l1-1.9L15.3 4l-1.9 1a6 6 0 0 0-1.3-.8L11.5 2ZM10 13a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"/></svg>
+    </button>
+  </header>
+
+  <main id="main">
+    <section id="pr-card" class="card">
+      <div class="eyebrow">This tab</div>
+      <div id="pr-title" class="pr-title">Open a GitHub pull request in this window.</div>
+      <div id="pr-ref" class="pr-ref"></div>
+      <textarea id="instruction" rows="4" placeholder="Optional for a review (focus). Required for an update: paste the change you and Dia agreed on."></textarea>
+      <div class="row">
+        <button id="review" class="pill secondary" disabled>Review on my behalf</button>
+        <button id="launch" class="pill" disabled>Update the PR</button>
+      </div>
+      <div id="progress" class="progress"></div>
+    </section>
+
+    <section id="active-card" class="card" hidden>
+      <div class="eyebrow">Active <span id="agent-count"></span></div>
+      <ul id="agents" class="agents"></ul>
+    </section>
+
+    <section class="card">
+      <div class="eyebrow">Review queue <span id="queue-count"></span></div>
+      <ul id="queue" class="queue"></ul>
+      <div id="queue-note" class="hint"></div>
+    </section>
+  </main>
+
+  <!-- Settings sheet, opened by the gear -->
+  <div id="settings" class="sheet" hidden>
+    <div class="sheet-head">
+      <span class="wordmark">settings</span>
+      <button id="settings-close" class="icon-btn" title="Close" aria-label="Close">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M5.3 4 4 5.3 8.7 10 4 14.7 5.3 16 10 11.3 14.7 16 16 14.7 11.3 10 16 5.3 14.7 4 10 8.7 5.3 4Z"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <label class="field">
+        <span class="label">Repos root</span>
+        <input id="repos-root" placeholder="~/herdr-dia">
+        <span class="field-hint">Where your checkouts live, e.g. <code>~/development</code>. Agents reuse an existing checkout here; otherwise a fresh clone lands under it.</span>
+      </label>
+
+      <label class="field">
+        <span class="label">GitHub identity</span>
+        <select id="gh-config"></select>
+        <span class="field-hint">Which <code>gh</code> login the queue and agents use.</span>
+      </label>
+
+      <label class="field">
+        <span class="label">Claude login</span>
+        <select id="claude-config"></select>
+        <span class="field-hint">Which Claude Code login the agent runs under. Set this if an agent says "Login expired".</span>
+      </label>
+
+      <label class="field">
+        <span class="label">Agent</span>
+        <select id="kind"></select>
+        <span class="field-hint">The coding agent Herdr runs. This is the model choice — Herdr lists what's installed.</span>
+      </label>
+
+      <label class="field">
+        <span class="label">Review default</span>
+        <select id="review-mode">
+          <option value="plan">Plan — the agent proposes; you decide</option>
+          <option value="auto">Auto — the agent posts its review directly</option>
+        </select>
+        <span class="field-hint">Updates always act in a fresh worktree, so they don't use this.</span>
+      </label>
+
+      <div class="field">
+        <span class="label">Repositories</span>
+        <div id="repos" class="chips"></div>
+        <span class="field-hint">Show only these repos in the queue. None selected = all. Populated from the repos currently requesting your review.</span>
+      </div>
+
+      <div class="field">
+        <span class="label">Favorite users</span>
+        <div id="authors" class="chips"></div>
+        <div class="row">
+          <input id="author-input" placeholder="add a github username">
+          <button id="author-add" class="pill secondary small" type="button">Add</button>
+        </div>
+        <span class="field-hint">Their PRs are pulled to the top of the queue as a "Favorites" team, grouped by author. Tap a chip from your queue, or type any GitHub username to add one — it's checked against GitHub before it's added.</span>
+      </div>
+
+      <label class="field check">
+        <input type="checkbox" id="unapproved" checked> <span>Unapproved PRs only</span>
+      </label>
+
+      <label class="field check">
+        <input type="checkbox" id="focus"> <span>Focus Herdr when an agent starts</span>
+      </label>
+
+      <div class="field">
+        <span class="label">Worktrees <span id="wt-count" class="muted"></span></span>
+        <ul id="worktrees" class="worktrees"></ul>
+        <button id="wt-tidy" class="pill secondary small">Tidy clean worktrees</button>
+        <span class="field-hint">Update mode makes a throwaway worktree per PR (branch <code>herdr-dia/pr-&lt;n&gt;</code>). Its commits push to the PR branch; the worktree is disposable. Removing one keeps the branch and refuses if it has uncommitted work.</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="panel.js"></script>
+</body>
+</html>

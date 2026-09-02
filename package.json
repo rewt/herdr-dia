@@ -1,0 +1,16 @@
+{
+  "name": "herdr-dia",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Give Dia hands: review and update the pull requests in your brief with Herdr agents.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:github": "TEST_GITHUB=1 node --test test/github-live.test.mjs",
+    "install-host": "node scripts/install.mjs",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
