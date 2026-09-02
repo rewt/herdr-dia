@@ -84,6 +84,17 @@ main { padding-bottom: 20px; }
   color: var(--muted); margin-bottom: 10px;
 }
 .eyebrow .muted, .muted { color: var(--faint); font-weight: 400; }
+.eyebrow-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+/* How old the queue is, and the way to refresh it — the same object, because the answer to
+   "is this current?" and "make it current" belong together. */
+.freshness {
+  font: inherit; font-size: 10.5px; letter-spacing: 0; text-transform: none;
+  color: var(--faint); background: transparent; border: 0; padding: 0;
+  cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.freshness:hover:not(:disabled) { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.freshness:disabled { cursor: default; }
+.freshness:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 
 .pr-title { font-weight: 600; }
 .pr-ref { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--muted); margin: 3px 0 10px; }
@@ -136,6 +147,17 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 
 .pr { padding: 9px 11px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
 .pr .head { display: grid; grid-template-columns: 9px 1fr; gap: 9px; align-items: start; }
+.pr-text { min-width: 0; }
+/* The repository leads, in bold — it is what places the row. The reason it reached you rides
+   along quietly on the same line. */
+.pr .repo { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr .repo .why { font-weight: 400; color: var(--faint); }
+/* The title is the link to the PR: a button, reset to read as text. */
+.pr .title-open { display: block; width: 100%; margin: 1px 0 0; padding: 0; font: inherit; line-height: 1.35; text-align: left; color: var(--ink); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.pr .title-open:hover { text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-strong); }
+.pr .title-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pr .title-open .num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--faint); margin-right: 3px; }
+/* Still used by the Other tier, which is a link and a label rather than a pull request. */
 .pr .ref { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--faint); }
 .pr .title { font-weight: 600; line-height: 1.35; }
 .state { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 7px; font-size: 11.5px; color: var(--muted); }

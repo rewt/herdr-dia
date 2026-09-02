@@ -118,7 +118,7 @@ Host log: `$TMPDIR/herdr-dia-host.log`.
 | `dia.hello` | Handshake: socket path, pid, home, default repos root. |
 | `dia.subscribe` | Opens the one Herdr event stream and relays its events to the panel. |
 | `dia.config` | What this machine has: `gh` config dirs (with the account each authenticates), the agents Herdr knows, the `~/.claude*` logins. |
-| `dia.queue` | The review queue: five tiers, filtered and decorated (below). |
+| `dia.queue` | The review queue: five tiers, filtered and decorated (below). Takes `force: true` to bypass the cache; answers carry `fetchedAt`, and `stale: true` when the answer came from a remembered one. |
 | `dia.launch` | PR + instruction → workspace tab → agent → brief. The only route that starts work. |
 | `dia.sessions` | The Active board: the session registry joined with Herdr's live agents, self-healing. |
 | `dia.review_text` | Reads a finished review back out of the agent (plan file, or its scrollback). |
@@ -144,6 +144,23 @@ Five tiers, from `gh api notifications` and `gh search prs`:
 
 Each PR is decorated with any review result already written for it and any agent working on it.
 `repos` scopes every tier; `onlyUnapproved` (default on) narrows the search itself.
+
+Answers are memoised, because GitHub's three calls are the slow part (roughly 400-900 ms each)
+and the panel re-asks on every filter change and every 20-second tick, while the underlying
+lists change on the order of minutes. Only GitHub's half is remembered: the repo filter,
+favourites, live agent status and review results are recomputed on every call, so a cache hit is
+still an accurate picture of what is running on this machine.
+
+- `HERDR_DIA_QUEUE_TTL_MS` (default 10 s) is the freshness window. **Keep it under the panel's
+  20-second tick** — at or above it, a tick gets served from cache and real freshness drifts
+  toward 40 s.
+- Cache keys carry the `gh` config dir, so a queue fetched under one login can never be served
+  to another. On disk that is one file per identity under `~/.herdr-dia/queue-cache/`, named by
+  a hash of the identity; the host lives only as long as the panel, so without this every reopen
+  would start cold. An answer remembered more than 10 minutes ago is not served on a cold start.
+- The panel shows the age in the queue's eyebrow ("just now", "2m ago", "remembered",
+  "checking…") and clicking it re-asks with `force`. While a remembered answer is on screen,
+  Merge is disabled — merging on a stale view is exactly the wrong risk to take.
 
 ### dia.launch and the review flow
 

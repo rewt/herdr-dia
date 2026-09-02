@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Herdr for Dia",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Review and update the pull requests in your brief with Herdr agents.",
   "permissions": [
     "nativeMessaging",

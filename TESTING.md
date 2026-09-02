@@ -38,6 +38,8 @@ tests and nothing touches your real state. The fake `gh` is symlinked into
   board, `failNext(...)` makes one call fail, `scriptDialog(...)` scripts a Claude Code select
   dialog (the highlight moves with the arrow keys, exactly as the host expects), `calls`
   records everything the host asked for.
+- `env.restartHost()` restarts the host against the same throwaway $HOME, which is how the
+  queue cache's warm-start behaviour is tested.
 - `test/fake-dom.mjs` — just enough DOM and `chrome` to boot `panel.js` in Node:
   `installPanelDom({ tab, handlers })` stubs the elements and the native-messaging port, and
   `panel-render.test.mjs` then reads the rendered rows, badges and buttons back.

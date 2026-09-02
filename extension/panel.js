@@ -88,10 +88,14 @@ function launchParams(extra) {
 }
 
 // ---------------------------------------------------------------- review queue
-async function refreshQueue() {
+async function refreshQueue({ force = false } = {}) {
   if (!port) return;
+  const gen = ++queueGen;
+  queueFetching = true;
+  renderQueueFreshness();
   try {
     const result = await request('dia.queue', {
+      force: force || undefined,
       reposRoot: settings.reposRoot || undefined,
       ghConfigDir: settings.ghConfigDir || undefined,
       repos: settings.repos.length ? settings.repos : undefined,
@@ -99,6 +103,7 @@ async function refreshQueue() {
       onlyUnapproved: settings.onlyUnapproved !== false,
       mineState: settings.mineState === 'closed' ? 'closed' : 'open',
     });
+    if (gen !== queueGen) return; // a newer fetch has already been asked for
     tiers = { favorites: result.favorites || [], mine: result.mine || [], brief: result.brief || [], team: result.team || [], other: result.other || [] };
     queue = result.prs || [];
     if (result.knownRepos) { knownRepos = result.knownRepos; if (!$('settings').hidden) renderRepoChips(); }
@@ -110,18 +115,115 @@ async function refreshQueue() {
     $('queue-note').textContent = notes.length ? `filtered to ${notes.join(' · ')}` : '';
     // Only re-render when the queue actually changed — otherwise a periodic refresh would
     // rebuild the rows (flicker, lost scroll, a half-armed merge reset) for no reason.
-    const sig = queueSignature(tiers);
+    minePending = false;
+    // The host can answer from its own note on disk so the panel isn't blank while GitHub is
+    // asked. That answer reads like any other except it isn't fresh: hold the irreversible
+    // things back and go and ask again in a moment, once the real fetch behind it has landed.
+    queueIsStale = Boolean(result.stale);
+    queueLoaded = true;
+    queueFetching = false;
+    queueFetchedAt = result.fetchedAt || Date.now();
+    renderQueueFreshness();
+    if (result.stale) { const t = setTimeout(() => { if (port) refreshQueue(); }, 1500); t?.unref?.(); }
+    else rememberQueue();
+    // The fingerprint carries the Mine toggle as well as the rows, so switching Open/Closed
+    // always repaints even when both states happen to hold the same PRs.
+    const sig = `${settings.mineState}|${queueSignature(tiers)}`;
     if (sig !== lastQueueSig) { lastQueueSig = sig; renderQueue(); }
   } catch (error) {
+    if (gen !== queueGen) return;
+    minePending = false;
+    queueFetching = false;
+    renderQueue();
+    renderQueueFreshness();
     $('queue-note').className = 'hint error';
     $('queue-note').textContent = error.message;
   }
 }
 
+// ---------------------------------------------------------------- how fresh is this?
+// The panel shows the last queue it saw the instant it opens, which is only honest if it also
+// says how old that is. The age doubles as the refresh control: the answer to "is this
+// current?" and the way to make it current are the same object.
+let queueFetching = false;
+let queueFetchedAt = 0;
+
+function ago(ms) {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 45) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.round(minutes / 60)}h ago`;
+}
+
+function renderQueueFreshness() {
+  const el = $('queue-refresh');
+  if (!el) return;
+  el.disabled = queueFetching;
+  if (queueFetching) el.textContent = 'checking…';
+  else if (queueIsStale) el.textContent = 'remembered';
+  else el.textContent = queueFetchedAt ? ago(Date.now() - queueFetchedAt) : 'refresh';
+}
+
+// Reopening the side panel restarts the host, so its memo is cold and the card would sit
+// blank for the second GitHub takes to answer. Keep the last answer in the panel's own
+// storage instead and paint it immediately, then let the real one replace it.
+//
+// What GitHub told us (repo, author, title, approval) is kept; what this machine told us
+// (a running agent, a finished review) is dropped, because a remembered agent status is a
+// claim about right now that we can't stand behind. Until the fresh answer lands the rows are
+// marked stale, and nothing irreversible is offered off them — see mergeButton.
+const QUEUE_CACHE_KEY = 'queueCache';
+const QUEUE_CACHE_MAX_AGE = 60 * 60 * 1000;
+let queueIsStale = false;   // showing remembered rows, GitHub not yet re-asked
+let queueLoaded = false;    // a real answer has landed at least once this session
+
+function rememberQueue() {
+  const keep = (pr) => ({ ...pr, agent: null, result: null });
+  try {
+    chrome.storage.local.set({ [QUEUE_CACHE_KEY]: {
+      at: Date.now(),
+      // Whose queue this was. chrome.storage is already per browser profile, but a profile can
+      // change identity in Settings, and last login's pull requests must not be painted under
+      // this one's name — not even for the second before the real answer lands.
+      ghConfigDir: settings.ghConfigDir || '',
+      mineState: settings.mineState,
+      tiers: {
+        favorites: (tiers.favorites || []).map(keep),
+        mine: (tiers.mine || []).map(keep),
+        brief: (tiers.brief || []).map(keep),
+        team: (tiers.team || []).map(keep),
+        other: tiers.other || [],
+      },
+    } });
+  } catch { /* storage is a convenience here, never a requirement */ }
+}
+
+async function restoreQueue() {
+  try {
+    const saved = (await chrome.storage.local.get([QUEUE_CACHE_KEY]))?.[QUEUE_CACHE_KEY];
+    if (!saved?.tiers || Date.now() - saved.at > QUEUE_CACHE_MAX_AGE) return;
+    if ((saved.ghConfigDir || '') !== (settings.ghConfigDir || '')) return; // a different login wrote it
+    // Mine was remembered for one side of the toggle; don't show it under the other.
+    if (saved.mineState !== settings.mineState) saved.tiers.mine = [];
+    tiers = saved.tiers;
+    queueIsStale = true;
+    renderQueue();
+    renderQueueFreshness();
+  } catch { /* nothing worth showing yet */ }
+}
+
 // The last fingerprint rendered, so an unchanged queue is left alone.
 let lastQueueSig = '';
+// Queue fetches can overlap (a 20s tick, a filter change, an impatient second click). Only the
+// newest is allowed to land — otherwise a slow earlier answer overwrites a newer one and the
+// Mine toggle ends up disagreeing with the rows under it.
+let queueGen = 0;
+// Set while a Mine open/closed switch is in flight, so the rows for the state you just left
+// aren't shown under the state you just picked.
+let minePending = false;
 
-let queueTab = 'favorites';
+let queueTab = 'mine';
 // Tabs stay put once seen this session, so a tier momentarily emptying (or a PR you just
 // opened) never drops its tab or bounces you to another one.
 const queueSeen = new Set();
@@ -143,7 +245,7 @@ function renderQueue() {
   // Show a tab if it has content now, has had content this session, or is the one you're on.
   const defs = order.filter(([key, , arr]) => arr.length || queueSeen.has(key) || key === queueTab);
 
-  if (!defs.length) { list.append(emptyRow('Nothing waiting on you.')); return; }
+  if (!defs.length) { list.append(emptyRow(queueLoaded ? 'Nothing waiting on you.' : 'loading…')); return; }
   if (!defs.some(([key]) => key === queueTab)) queueTab = defs[0][0];
 
   const bar = document.createElement('div');
@@ -164,7 +266,7 @@ function renderQueue() {
   const body = document.createElement('ul');
   body.className = 'queue';
   renderTier(queueTab, body);
-  if (!body.childElementCount) body.append(emptyRow(`No ${defs.find(([k]) => k === queueTab)?.[1] || 'items'} right now.`));
+  if (!body.childElementCount) body.append(emptyRow(queueLoaded ? `No ${defs.find(([k]) => k === queueTab)?.[1] || 'items'} right now.` : 'loading…'));
   list.append(body);
 }
 
@@ -177,15 +279,16 @@ function renderTier(key, body) {
     }
   } else if (key === 'mine') {
     body.append(renderMineToggle());
+    if (minePending) { body.append(emptyRow('loading…')); return; }
     for (const pr of tiers.mine) body.append(renderPrRow(pr));
-    if (!tiers.mine.length) body.append(emptyRow(settings.mineState === 'closed' ? 'No closed PRs.' : 'No open PRs of yours.'));
+    if (!tiers.mine.length) body.append(emptyRow(!queueLoaded ? 'loading…' : settings.mineState === 'closed' ? 'No closed PRs.' : 'No open PRs of yours.'));
   } else if (key === 'brief') {
     for (const pr of tiers.brief) body.append(renderPrRow(pr));
   } else if (key === 'team') {
     let lastRepo = null;
     for (const pr of tiers.team) {
       if (pr.repo !== lastRepo) { body.append(tierHeading(`${pr.owner}/${pr.repo}`, true)); lastRepo = pr.repo; }
-      body.append(renderPrRow(pr));
+      body.append(renderPrRow(pr, { hideRepo: true }));
     }
   } else if (key === 'other') {
     for (const item of tiers.other) {
@@ -220,7 +323,13 @@ function renderMineToggle() {
     b.type = 'button';
     b.className = `seg${settings.mineState === state ? ' active' : ''}`;
     b.textContent = label;
-    b.addEventListener('click', () => { if (settings.mineState !== state) saveField('mineState', state, refreshQueue); });
+    // Repaint on the click rather than on the answer: the segment has to move under the
+    // finger, even when Mine still has a round-trip to go.
+    b.addEventListener('click', () => {
+      if (settings.mineState === state) return;
+      minePending = true;
+      saveField('mineState', state, () => { renderQueue(); refreshQueue(); });
+    });
     li.append(b);
   }
   return li;
@@ -235,7 +344,7 @@ function tierHeading(text, sub = false) {
 
 
 // The state line + action buttons for a PR, shared by the queue rows and the This-tab card.
-// includeDispatch adds the "Review on my behalf" starter (queue only; This-tab has its own
+// includeDispatch adds the "Review with an agent" starter (queue only; This-tab has its own
 // buttons). Returns null when there's nothing to show (no agent, no result).
 function buildPrState(pr, includeDispatch, opts = {}) {
   const reviewReady = Boolean(pr.agent && pr.agent.mode === 'review' && settled(pr.agent));
@@ -270,7 +379,10 @@ function buildPrState(pr, includeDispatch, opts = {}) {
     );
     if (pr.result.comment_url) state.append(smallButton('Comment', () => chrome.tabs.create({ url: pr.result.comment_url }), true));
   } else if (includeDispatch) {
-    state.append(smallButton('Review on my behalf', () => dispatch(pr, 'review', ''), false));
+    // Outline, not filled: every untouched queue row offers this same verb, so a solid pill
+    // ten rows deep would only compete with the titles being triaged. Filled is reserved for
+    // the row that differs — a ready review, a mergeable PR.
+    state.append(smallButton('Review with an agent', () => dispatch(pr, 'review', ''), true));
   }
   return state;
 }
@@ -288,7 +400,9 @@ function appendReviewBits(pr, container) {
   if (review) container.append(renderReviewBlock(pr, review));
 }
 
-function renderPrRow(pr) {
+// opts.hideRepo: the tier already groups by repository (Team), so the row would only repeat
+// its own heading. Everywhere else the row has to place itself.
+function renderPrRow(pr, opts = {}) {
   const li = document.createElement('li');
   li.className = 'pr';
   const head = document.createElement('div');
@@ -296,20 +410,41 @@ function renderPrRow(pr) {
   const dot = document.createElement('span');
   dot.className = `dot ${pr.agent ? pr.agent.status : (pr.result ? 'reviewed' : 'idle')}`;
   const text = document.createElement('div');
-  const ref = document.createElement('div');
-  ref.className = 'ref';
-  ref.textContent = `${pr.owner}/${pr.repo}#${pr.number}${pr.author ? ` · ${pr.author}` : ''}${pr.reason ? ` · ${REASONS[pr.reason] || pr.reason}` : ''}`;
-  const title = document.createElement('div');
-  title.className = 'title';
-  title.textContent = pr.title;
-  text.append(ref, title);
+  text.className = 'pr-text';
+
+  // The repository leads the row: you place a PR before you read it, and every tier except
+  // Team is a mix of repos.
+  const repo = document.createElement('div');
+  repo.className = 'repo';
+  repo.textContent = `${pr.owner}/${pr.repo}`;
+  if (pr.reason) {
+    const why = document.createElement('span');
+    why.className = 'why';
+    why.textContent = ` · ${REASONS[pr.reason] || pr.reason}`;
+    repo.append(why);
+  }
+
+  // The title is the link. A button rather than a styled div so it is reachable from the
+  // keyboard and announced as something you can press.
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'title-open';
+  open.title = 'Open this pull request';
+  const num = document.createElement('span');
+  num.className = 'num';
+  num.textContent = `#${pr.number}`;
+  open.append(num, document.createTextNode(` ${pr.title}`));
+  open.addEventListener('click', (event) => { event.stopPropagation(); chrome.tabs.create({ url: pr.url }); });
+
+  // Hidden only when the heading above already says it — and never at the cost of the reason.
+  if (!opts.hideRepo || pr.reason) text.append(repo);
+  text.append(open);
   const badge = approvalBadge(pr);
   if (badge) text.append(badge);
   head.append(dot, text);
   li.append(head);
   const state = buildPrState(pr, true);
   if (pr.reviewDecision !== undefined) state.append(mergeButton(pr)); // mine PRs carry a review decision
-  state.append(smallButton('PR', () => chrome.tabs.create({ url: pr.url }), true));
   li.append(state);
   appendReviewBits(pr, li);
   return li;
@@ -336,8 +471,10 @@ function mergeButton(pr) {
   btn.type = 'button';
   btn.className = `pill small merge${armed ? ' confirm' : ''}`;
   btn.textContent = armed ? 'Confirm merge' : 'Merge';
-  btn.disabled = !merge.enabled;
-  if (merge.title) btn.title = merge.title;
+  // Remembered rows are good enough to read; they are not good enough to merge from.
+  btn.disabled = !merge.enabled || queueIsStale;
+  if (queueIsStale) btn.title = 'checking with GitHub…';
+  else if (merge.title) btn.title = merge.title;
   btn.addEventListener('click', async (event) => {
     event.stopPropagation();
     if (!mergeArmed.has(key)) {
@@ -451,7 +588,7 @@ async function instruct(pr, text) {
 
 function smallButton(text, onClick, secondary = false) {
   const b = document.createElement('button');
-  b.className = `small${secondary ? ' secondary' : ''}`;
+  b.className = `pill small${secondary ? ' secondary' : ''}`;
   b.textContent = text;
   b.addEventListener('click', (event) => { event.stopPropagation(); onClick(); });
   return b;
@@ -670,12 +807,20 @@ function option(value, label, selected) {
 
 // Populate the dropdowns from what actually exists on this machine (dia.config), then
 // restore the saved selections.
+// The panel's own preferences live in chrome.storage and need no host at all. They have to be
+// read before the first dia.queue goes out — otherwise that queue asks GitHub the wrong
+// question (the default identity, no favourites, no repo filter) and its answer stands until
+// the 20s tick finally replaces it.
+const SETTING_KEYS = ['reposRoot', 'ghConfigDir', 'claudeConfigDir', 'kind', 'planMode', 'focus', 'repos', 'favorites', 'onlyUnapproved', 'mineState'];
+
+async function loadSettings() {
+  try { Object.assign(settings, await chrome.storage.local.get(SETTING_KEYS)); } catch { /* first run: defaults */ }
+}
+
 async function loadConfig() {
   let cfg = { identities: [], agents: [], claudeConfigs: [] };
   try { cfg = await request('dia.config'); } catch (error) { showProgress(error.message, true); }
 
-  const saved = await chrome.storage.local.get(['reposRoot', 'ghConfigDir', 'claudeConfigDir', 'kind', 'planMode', 'focus', 'repos', 'favorites', 'onlyUnapproved', 'mineState']);
-  Object.assign(settings, saved);
   $('repos-root').value = settings.reposRoot || '';
   $('focus').checked = settings.focus === true;
   $('unapproved').checked = settings.onlyUnapproved !== false;
@@ -840,8 +985,15 @@ $('wt-tidy').addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------------------- go
+// Order matters. Settings are local and instant, and the first queue is only asked the right
+// question once they're in. The remembered queue paints before the host has even started.
+$('queue-refresh').addEventListener('click', () => refreshQueue({ force: true }));
+await loadSettings();
+await restoreQueue();
 connect();
 readCurrentTab();
 setInterval(() => { if (port) refreshAgents(); }, 5000);
 setInterval(() => { if (port) refreshQueue(); }, 20000);
+// Just the label — re-rendering rows on a timer would fight the signature guard for nothing.
+setInterval(renderQueueFreshness, 30000);
 setInterval(() => { if (port) refreshSessions(); }, 8000);

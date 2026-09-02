@@ -20,6 +20,7 @@ import net from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { execFile, execFileSync } from 'node:child_process';
 import {
   expandHome, resolveRepoDir, resultPath, agentSlug, agentBase, agentName, AGENT_NAME_RE,
@@ -418,6 +419,7 @@ async function mergePr({ owner, repo, number, ghConfigDir, method }) {
   }
   try {
     const out = await gh(['pr', 'merge', String(number), '--repo', `${owner}/${repo}`, `--${m}`], { ghConfigDir });
+    invalidateQueueCache(ghConfigDir); // the PR has just left the open lists — don't serve them from memory
     return { type: 'merged', owner, repo, number, method: m, output: out.trim() };
   } catch (error) {
     const e = new Error(String(error.message).replace(/^gh pr merge:\s*/, '').trim());
@@ -599,6 +601,129 @@ async function removeWorktree({ id, force = false }) {
   return { type: 'worktree_removed', id, branch: entry.branch || null };
 }
 
+// ---------------------------------------------------------------- queue cache
+// GitHub's answers are the slow part of dia.queue — three calls, roughly 400-900ms each — and
+// the panel re-asks on every filter change and every 20s tick. They are also the *stable*
+// part: a list of pull requests changes on the order of minutes. So they are memoised here,
+// while everything derived from them (the repo filter, favourites, agent status, review
+// results) is recomputed on every call. A cache hit is still an accurate picture of what is
+// running on this machine right now; only GitHub's half is remembered.
+//
+// Keys carry only what each call actually depends on, so switching Mine between open and
+// closed re-asks for Mine alone and leaves notifications and review-requests on cache.
+//
+// Cached values are shared between callers: treat them as immutable (the two `gh` results are
+// raw JSON, re-parsed per call; fetchMine's rows are only ever read).
+const QUEUE_TTL_MS = Number(process.env.HERDR_DIA_QUEUE_TTL_MS ?? 10_000); // under the panel's 20s tick, so a tick always revalidates
+// Keyed `<gh config dir>\n<what was asked>`: the identity is part of the identity of the answer,
+// so a lookup made under one GitHub login can never return another login's queue.
+const queueCache = new Map();  // key -> { at, value, inflight, warm }
+
+// The host only lives as long as the side panel, so without something on disk every reopen
+// starts cold and pays GitHub's full second again.
+//
+// One file per GitHub identity, named by a hash of its config dir. Two browser profiles signed
+// in as two different people therefore never share a file: they can't read each other's
+// answers, and can't clobber each other's writes. The hash also keeps the login out of the
+// filename, and the entries inside are stored without it for the same reason.
+const queueCacheDir = path.join(HOME, '.herdr-dia', 'queue-cache');
+const cacheFileFor = (ghKey) => path.join(queueCacheDir, `${crypto.createHash('sha256').update(String(ghKey)).digest('hex').slice(0, 16)}.json`);
+// How old a remembered answer may be and still be worth showing while the real one is fetched.
+const WARM_START_MAX_AGE = 10 * 60 * 1000;
+
+const memKey = (ghKey, local) => `${ghKey}\n${local}`;
+const loadedIdentities = new Set();
+
+// 0.1.0 kept one unscoped file holding every identity's answers side by side. Nothing reads it
+// any more, so remove it rather than leave somebody's pull requests lying around.
+try { fs.rmSync(path.join(HOME, '.herdr-dia', 'queue-cache.json'), { force: true }); } catch { /* nothing to tidy */ }
+
+function loadQueueCache(ghKey) {
+  if (loadedIdentities.has(ghKey)) return;
+  loadedIdentities.add(ghKey);
+  try {
+    for (const [local, entry] of Object.entries(JSON.parse(fs.readFileSync(cacheFileFor(ghKey), 'utf8')))) {
+      // `warm` marks it as good for exactly one answer: it is served once, immediately, while
+      // the real fetch runs behind it. After that it is an ordinary aged entry.
+      if (entry?.at && Date.now() - entry.at < WARM_START_MAX_AGE) queueCache.set(memKey(ghKey, local), { ...entry, warm: true });
+    }
+  } catch { /* first run for this identity, or a file we can't read: start cold */ }
+}
+
+function saveQueueCache(ghKey) {
+  try {
+    const out = {};
+    const prefix = `${ghKey}\n`;
+    // This identity's entries only, and only what a future startup could actually use: an entry
+    // past the warm window is ignored on load, so keeping it is dead weight — and it is
+    // somebody's pull request titles.
+    for (const [key, entry] of queueCache) {
+      if (!key.startsWith(prefix) || !('value' in entry)) continue;
+      if (Date.now() - entry.at >= WARM_START_MAX_AGE) continue;
+      out[key.slice(prefix.length)] = { at: entry.at, value: entry.value };
+    }
+    fs.mkdirSync(queueCacheDir, { recursive: true });
+    fs.writeFileSync(cacheFileFor(ghKey), JSON.stringify(out));
+  } catch { /* the cache is a convenience, never a requirement */ }
+}
+
+// True when the answer being built is standing on a remembered value rather than a fresh one.
+let servedWarm = false;
+
+// force: the user pressed Refresh. Skip both the age check and the remembered answer — but
+// still join a fetch already in flight rather than sending a second one at GitHub.
+async function cachedFetch(ghKey, local, produce, { force = false } = {}) {
+  const key = memKey(ghKey, local);
+  const hit = queueCache.get(key);
+  if (hit?.inflight) return hit.inflight;              // one flight per key: coalesce callers
+  if (force) return refetch(ghKey, key, produce);
+  if (hit && !hit.warm && Date.now() - hit.at < QUEUE_TTL_MS) return hit.value;
+  if (hit?.warm) {
+    // Answer from the note on disk now, and go and check. The panel is told the answer is
+    // remembered (queue.stale), so it re-asks in a moment and offers nothing irreversible
+    // until it has heard back.
+    servedWarm = true;
+    queueCache.set(key, { at: hit.at, value: hit.value });   // the warm pass is spent
+    refetch(ghKey, key, produce);
+    return hit.value;
+  }
+  return refetch(ghKey, key, produce);
+}
+
+function refetch(ghKey, key, produce) {
+  const hit = queueCache.get(key);
+  const inflight = produce().then(
+    (value) => { queueCache.set(key, { at: Date.now(), value }); saveQueueCache(ghKey); return value; },
+    (error) => {
+      // A blip shouldn't empty a tier and read as "nothing to review". Keep the last good
+      // answer, and its age, so the next call retries immediately; only surface the error
+      // when there is nothing to fall back to.
+      if (hit && 'value' in hit) { queueCache.set(key, { at: hit.at, value: hit.value }); return hit.value; }
+      queueCache.delete(key);
+      throw error;
+    },
+  );
+  queueCache.set(key, { ...queueCache.get(key), inflight });
+  return inflight;
+}
+
+// Anything that changes GitHub state drops the memo for the identity that changed it — never
+// another login's, which this process may also be holding.
+function invalidateQueueCache(ghConfigDir) {
+  const ghKey = ghConfigDir || 'default';
+  const prefix = `${ghKey}\n`;
+  for (const key of [...queueCache.keys()]) if (key.startsWith(prefix)) queueCache.delete(key);
+  saveQueueCache(ghKey);
+}
+
+// The queue is only as fresh as its stalest part.
+function oldestFetch(ghKey, onlyUnapproved, mineState) {
+  const ats = ['notifications', `requested:${onlyUnapproved}`, `mine:${mineState}`]
+    .map((local) => queueCache.get(memKey(ghKey, local))?.at)
+    .filter(Boolean);
+  return ats.length ? Math.min(...ats) : Date.now();
+}
+
 // Your own PRs, enriched with review decision + mergeability via one GraphQL query. Falls back
 // to a plain REST search (no review/merge data) if GraphQL errors, so the list is never empty
 // just because the enrichment hiccuped. Returns normalized nodes.
@@ -624,6 +749,7 @@ async function fetchMine(mineState, ghOptions) {
 //   other  non-PR notifications (deployment approvals, CI) — links only
 // Each PR carries any review result already written and any agent working on it.
 async function queue(p) {
+  servedWarm = false;
   const root = expandHome(p.reposRoot || DEFAULT_ROOT);
   fs.mkdirSync(root, { recursive: true });
   const ghOptions = { cwd: root, ghConfigDir: p.ghConfigDir };
@@ -636,10 +762,16 @@ async function queue(p) {
   const inFilter = (owner, repo) => !repoFilter.size || repoFilter.has(repo.toLowerCase()) || repoFilter.has(`${owner}/${repo}`.toLowerCase());
   const searchArgs = ['search', 'prs', '--review-requested=@me', '--state=open', '--limit', '100', '--json', 'number,title,repository,url,updatedAt,author'];
   if (onlyUnapproved) searchArgs.splice(4, 0, '--review', 'required');
+  // Only the GitHub calls are cached, and each only against the inputs it reads. agent.list is
+  // a local socket round-trip and stays live, so dots and buttons are never stale.
+  const ghKey = p.ghConfigDir || 'default';
+  loadQueueCache(ghKey);
+  const opts = { force: p.force === true };
   const [notificationsRaw, requestedRaw, mineRaw, agents] = await Promise.all([
-    gh(['api', 'notifications?all=false&per_page=100'], ghOptions).catch((error) => { log('notifications', error.message); return '[]'; }),
-    gh(searchArgs, ghOptions),
-    fetchMine(mineState, ghOptions),
+    cachedFetch(ghKey, 'notifications', () => gh(['api', 'notifications?all=false&per_page=100'], ghOptions), opts)
+      .catch((error) => { log('notifications', error.message); return '[]'; }),
+    cachedFetch(ghKey, `requested:${onlyUnapproved}`, () => gh(searchArgs, ghOptions), opts),
+    cachedFetch(ghKey, `mine:${mineState}`, () => fetchMine(mineState, ghOptions), opts),
     call('agent.list').then((r) => r.agents || []).catch(() => []),
   ]);
 
@@ -717,6 +849,10 @@ async function queue(p) {
     prs: [...favorites, ...mine, ...briefList, ...teamList],
     knownRepos: [...knownRepos].sort(), knownAuthors: [...knownAuthors].sort((a, b) => a.localeCompare(b)),
     onlyUnapproved, mineState, repoFilterActive: repoFilter.size > 0,
+    stale: servedWarm || undefined,
+    // When GitHub actually answered, so the panel can say how old what you're reading is
+    // rather than implying everything on screen is live.
+    fetchedAt: oldestFetch(ghKey, onlyUnapproved, mineState),
   };
 }
 
@@ -761,6 +897,7 @@ async function reviewText({ name, lines = 600 }) {
 async function markRead(threadId, p) {
   if (!threadId) return;
   await gh(['api', '-X', 'PATCH', `notifications/threads/${threadId}`], { ghConfigDir: p.ghConfigDir }).catch((error) => log('markRead', error.message));
+  invalidateQueueCache(p.ghConfigDir); // the thread just left the unread list the Brief tier is built from
 }
 
 // One workspace for everything the extension launches, labeled `herdr-dia`. Every PR — any

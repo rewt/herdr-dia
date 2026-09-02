@@ -17,7 +17,10 @@ const queueAnswer = {
   brief: [
     { owner: 'rewt', repo: 'herdr-dia', number: 1, title: 'Please look', url: 'https://github.com/rewt/herdr-dia/pull/1', author: 'alice', reason: 'review_requested', threadId: 'th-1', updatedAt: '2026-09-01T11:00:00Z', result: null, agent: null },
   ],
-  team: [],
+  team: [
+    { owner: 'rewt', repo: 'acme-platform', number: 30, title: 'Split the scheduler off the shared queue', url: 'https://github.com/rewt/acme-platform/pull/30', author: 'bob', updatedAt: '2026-09-01T10:00:00Z', result: null, agent: null },
+    { owner: 'rewt', repo: 'acme-platform', number: 31, title: 'Rotate the enrolment keys', url: 'https://github.com/rewt/acme-platform/pull/31', author: 'alice', updatedAt: '2026-09-01T09:00:00Z', result: null, agent: null },
+  ],
   other: [],
   prs: [],
   knownRepos: ['herdr-dia'],
@@ -70,21 +73,33 @@ test('the active tab becomes the This-tab card', () => {
   assert.equal(panel.el('launch').disabled, false);
 });
 
-test('the queue renders a tab per tier, with counts', () => {
+test('the queue opens on Mine, with a tab per tier and its count', () => {
   const tabs = findAll(queueRoot(), (el) => el.classList.contains('tab'));
   // Empty tiers get no tab — except the one you are on, so the panel never moves the ground
-  // under you when a tier momentarily empties.
-  assert.deepEqual(tabs.map((t) => t.textContent.trim()), ['Favorites 0', 'Mine 2', 'Brief 1']);
-  assert.ok(tabs[0].classList.contains('active'), 'Favorites is where the queue opens');
-  assert.match(queueRoot().textContent, /No Favorites right now./);
+  // under you when a tier momentarily empties. Favorites is empty here and isn't the landing
+  // tab, so it doesn't appear at all.
+  assert.deepEqual(tabs.map((t) => t.textContent.trim()), ['Mine 2', 'Brief 1', 'Team 2']);
+  assert.ok(tabs[0].classList.contains('active'), 'Mine is where the queue opens');
+  assert.ok(rowFor(40), 'and it opens with your own PRs already on screen');
 });
 
-test('a PR row carries its reference, author and reason', () => {
+test('a PR row leads with the repository, then the number and title', () => {
   tabButton('Brief').dispatch('click');
   const row = rowFor(1);
   assert.ok(row, 'the brief PR is rendered');
-  assert.match(row.textContent, /rewt\/herdr-dia#1 · alice · review requested/);
-  assert.match(row.textContent, /Please look/);
+  assert.equal(byClass(row, 'repo')[0].textContent, 'rewt/herdr-dia · review requested',
+    'the repository leads, with the reason it reached you alongside');
+  assert.equal(byClass(row, 'title-open')[0].textContent, '#1 Please look',
+    'the number and title sit under it');
+  assert.equal(row.textContent.includes('alice'), false, 'the author is not carried');
+});
+
+test('the title opens the pull request, without needing a PR button', () => {
+  tabButton('Brief').dispatch('click');
+  const before = panel.opened.length;
+  byClass(rowFor(1), 'title-open')[0].dispatch('click');
+  assert.deepEqual(panel.opened.slice(before), [{ url: 'https://github.com/rewt/herdr-dia/pull/1' }]);
+  assert.equal(byText(rowFor(1), 'PR'), null, 'the redundant PR button is gone');
 });
 
 test('your own approved PR shows the badge and an armed-on-second-click Merge', async () => {
@@ -149,4 +164,67 @@ test('the settings sheet is populated from what this machine actually has', asyn
   assert.deepEqual(panel.el('kind').children.map((o) => o.textContent), ['claude · 1', 'codex · 1']);
   assert.deepEqual(byClass(panel.el('repos'), 'chip').map((c) => c.textContent), ['herdr-dia']);
   assert.deepEqual(byClass(panel.el('authors'), 'chip').map((c) => c.textContent), ['@alice']);
+});
+
+// Switching Mine between open and closed is a round-trip to GitHub. The segment still has to
+// move under the finger, and the state you just left must not sit under the label you just
+// picked. Everything here is read back synchronously, before the answer is allowed to land.
+test('the Mine switch moves on the click, not on the answer', async () => {
+  tabButton('Mine').dispatch('click');
+  const toggle = () => find(queueRoot(), (el) => el.classList.contains('mine-toggle'));
+  assert.ok(toggle().children[0].classList.contains('active'), 'starts on Open');
+
+  const before = panel.requestsFor('dia.queue').length;
+  toggle().children[1].dispatch('click');
+
+  assert.ok(toggle().children[1].classList.contains('active'), 'Closed is lit before GitHub answers');
+  assert.equal(toggle().children[0].classList.contains('active'), false, 'and Open has let go');
+  assert.match(queueRoot().textContent, /loading…/, 'the open PRs are not shown under the closed label');
+  assert.equal(rowFor(40), undefined, 'really not shown');
+  assert.equal(panel.requestsFor('dia.queue').length, before + 1, 'one fetch, not one per repaint');
+
+  await panel.settle();
+  assert.ok(toggle().children[1].classList.contains('active'), 'and it stays put once the answer lands');
+  assert.ok(rowFor(40), 'with the rows back');
+
+  toggle().children[0].dispatch('click'); // back to Open, for whatever runs after this
+  await panel.settle();
+});
+
+// Team is the one tier grouped by repository, so its heading already places every row under it.
+test('a Team row does not repeat the repository its heading already gives', () => {
+  tabButton('Team').dispatch('click');
+  const heading = findAll(queueRoot(), (el) => el.classList.contains('tier-heading'))[0];
+  assert.equal(heading.textContent, 'rewt/acme-platform');
+
+  const row = rowFor(30);
+  assert.equal(byClass(row, 'repo').length, 0, 'the row says it once, in the heading');
+  assert.equal(byClass(row, 'title-open')[0].textContent, '#30 Split the scheduler off the shared queue');
+});
+
+// The queue's age and its refresh are one control: it says how old what you're reading is, and
+// pressing it makes it current.
+test('the freshness label doubles as the refresh button', async () => {
+  const label = panel.el('queue-refresh');
+  assert.equal(label.textContent, 'just now', 'a fresh answer reads as current');
+
+  const before = panel.requestsFor('dia.queue').length;
+  label.dispatch('click');
+  assert.equal(label.textContent, 'checking…', 'it says so while it checks');
+  assert.equal(label.disabled, true, 'and cannot be pressed twice');
+
+  const asked = panel.requestsFor('dia.queue');
+  assert.equal(asked.length, before + 1);
+  assert.equal(asked[asked.length - 1].params.force, true, 'Refresh asks for a real fetch');
+
+  await panel.settle();
+  assert.equal(label.textContent, 'just now');
+  assert.equal(label.disabled, false);
+});
+
+test('the dispatch button reads the same on your own PRs as on anyone else’s', () => {
+  tabButton('Mine').dispatch('click');
+  assert.ok(byText(rowFor(41), 'Review with an agent'), 'universal wording, no "on my behalf"');
+  tabButton('Brief').dispatch('click');
+  assert.ok(byText(rowFor(1), 'Review with an agent'));
 });

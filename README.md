@@ -1,80 +1,86 @@
 # herdr-dia
 
-**Give Dia hands.** Dia can read a pull request and talk it through with you — but it can't
-push commits, edit the branch, or change the PR. This extension adds the missing step: hand the
-work to a [Herdr](https://herdr.dev) coding agent from the PR tab, watch it in the side panel,
-and decide what happens next.
+Give Dia hands.
 
-A Dia (or any Chromium) side panel, plus a Node native-messaging host that talks to your local
-Herdr socket. No account, no server, no telemetry — the agent runs on your machine with your
-own `gh` and git.
+Dia is good at reading a pull request and talking it through with you. What it can't do is act
+on any of that: no commits, no edits to the branch, nothing that touches the PR. So this
+extension picks up where the conversation stops. From the PR tab you hand the work to a
+[Herdr](https://herdr.dev) coding agent, watch it run in the side panel, and decide what to do
+with what it brings back.
+
+It's a side panel for Dia (or any Chromium browser) plus a small Node host that talks to the
+Herdr socket on your machine. There's no account to make and no server in the middle. The agent
+runs locally, as you, with your own `gh` and git.
 
 ## What it looks like
 
 <table>
 <tr>
 <td width="50%" valign="top">
-<img src="docs/screenshots/review-ready.png" alt="The Active board with a finished review open: findings by severity, a recommendation, and the review text">
-<p><b>The review is ready, and the decision sits next to it.</b> Findings with severity and
-file:line, the recommendation, and a box to tell the agent how to proceed. Typing in that box
-is the approval.</p>
+<img src="docs/screenshots/active-review.png" width="100%" alt="An Active board session marked review ready, showing findings by severity with file and line, a recommendation, the review text, a box to tell the agent how to proceed, and Post as comment / Apply the fixes buttons">
+<p><b>Read the review.</b> It opens in the panel, and the box under it goes straight back to the
+agent, so you can say what you want next.</p>
 </td>
 <td width="50%" valign="top">
-<img src="docs/screenshots/queue-team.png" alt="The review queue on the Team tab, pull requests grouped by repository">
-<p><b>The queue is the product.</b> Tabs for what's addressed to you, what your team owes, the
-authors you favourited, and your own PRs — Team grouped by repository, because CODEOWNERS asks
-across dozens at once.</p>
+<img src="docs/screenshots/peek-review.png" width="100%" alt="An Active board session marked reviewing, expanded to show the partial review the agent has written so far, with the same reply box beneath it">
+<p><b>Peek while it works.</b> You don't have to wait for the agent to finish. Open a running
+review and read what it has so far.</p>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<img src="docs/screenshots/mine-merge.png" alt="The Mine tab: an approved pull request with an enabled Merge button, others disabled">
-<p><b>Merge lights up only when it should.</b> Approved <em>and</em> mergeable, and it takes two
-clicks. Everything else keeps it off.</p>
+<img src="docs/screenshots/queue-mine.png" width="100%" alt="The review queue on the Mine tab: your own pull requests, the first approved with a green check and an enabled Merge button, the rest with Merge disabled">
+<p><b>Merge your own.</b> Mine tracks where each review stands, and Merge only wakes up once a
+PR is approved and mergeable.</p>
 </td>
 <td width="50%" valign="top">
-<img src="docs/screenshots/settings.png" alt="The settings sheet: repos root, GitHub identity, Claude login, agent picker, repository chips and favourite users">
-<p><b>Nothing to type or guess.</b> Every dropdown is built from what's on the machine — your
-<code>gh</code> logins, Claude configs, and the agents Herdr has installed.</p>
+<img src="docs/screenshots/queue-favorites.png" width="100%" alt="The review queue on the Favourites tab, pull requests grouped under the author who opened them">
+<p><b>Follow the people you work with.</b> Their PRs get pulled out of the pile and grouped by
+author, so the ones you actually review come first.</p>
 </td>
 </tr>
 </table>
 
-> The real panel on invented data: `node scripts/demo.mjs` serves it with a fake `chrome` in
-> front, so you can click through the whole UI with no Herdr, no GitHub account and nothing
-> installed. Every repository, author and pull request in these shots is fictional.
+> These are the real panel running on made-up data. `node scripts/demo.mjs` serves it with a
+> fake `chrome` in front, so you can click around the whole thing without Herdr, a GitHub
+> account, or installing anything. Every repo, author and PR you see is invented.
 
 ## Install
 
-Needs **Node 20+**, **Herdr** running, and **Dia** (or Chrome / Arc / Brave / Edge / Chromium).
+You'll need Node 20 or newer, Herdr running, and Dia (or Chrome, Arc, Brave, Edge, Chromium).
 
 ```sh
 node scripts/install.mjs
 ```
 
-Then, in the browser: extensions page → developer mode → **Load unpacked** → the `extension/`
-directory (the installer prints the path). Click the toolbar icon; a green socket path in the
-panel header means you're connected.
+Then load it in the browser: extensions page, turn on developer mode, hit Load unpacked, and
+pick the `extension/` directory. The installer prints the full path, so you can paste it. Click
+the toolbar icon and you should see a green socket path in the panel header.
 
-Using an AI coding agent? Tell it **"install herdr-dia"** — [AGENTS.md](AGENTS.md) walks it
-through, including the one step it can't do for you.
+If you'd rather not do any of that yourself, tell an AI coding agent to "install herdr-dia" and
+point it at [AGENTS.md](AGENTS.md). It can handle everything except the one click that has to
+be yours.
 
 ## What you get
 
-- **A queue worth triaging.** Five tabs — Favourites, Mine, Brief, Team, Other — built from
-  your GitHub notifications and review requests. Filter to the repos you care about; pull the
-  authors you follow to the top.
-- **Review on my behalf.** The agent reads the PR and writes the review as a *plan*: it can't
-  post, edit or clone. You get findings, a recommendation, and two shortcuts — **Post as
-  comment** or **Apply the fixes**.
-- **Update the PR.** Paste what you and Dia agreed on. The agent works in its own git worktree,
-  commits in the branch's style, and pushes to the PR branch. Your checkout is never touched.
-- **An Active board.** One row per session, whatever needs you first: `reviewing…` →
-  `review ready` → **End**. Drive several PRs at once without hunting through Herdr tabs.
-- **Your own PRs.** The Mine tab shows review state, a ✓ approved badge, and a Merge button
-  that only lights up when the PR is approved and mergeable.
+- **A queue worth opening.** Five tabs (Favourites, Mine, Brief, Team, Other) built from your
+  GitHub notifications and review requests. Narrow it to the repos you care about, and the
+  people you follow get pulled to the top.
+- **Review with an agent.** Claude Code reads the PR in plan mode, so while it works it can't
+  post, edit or clone anything. You get findings, a recommendation, and two shortcuts: post it
+  as a comment, or apply the fixes. Other agents have no plan mode, so they write their review
+  and post it themselves.
+- **Update the PR.** Paste in what you and Dia agreed on. The agent gets a git worktree of its
+  own, commits in the style of the branch, and pushes to the PR. Your checkout stays exactly as
+  you left it.
+- **An Active board.** One row per session, sorted so the one that needs you shows up first,
+  from `reviewing…` through `review ready`. You can keep several PRs going at once without
+  hunting through Herdr tabs.
+- **Your own PRs.** The Mine tab tracks where each review stands, with a ✓ approved badge and a
+  Merge button that only comes alive when the PR is approved and mergeable.
 
-Anything irreversible — a comment, a push, a merge — waits for your click.
+Nothing irreversible happens that you didn't ask for. An update pushes because you asked for an
+update, and in plan mode the finished review sits in the panel until you say post it.
 
 ## Tests
 
@@ -82,9 +88,10 @@ Anything irreversible — a comment, a push, a merge — waits for your click.
 npm test
 ```
 
-201 tests, zero dependencies, offline in about half a minute: a fake Herdr socket, a fake `gh`,
-real git repositories in temp directories, and the real host driven over real native-messaging
-framing. See [TESTING.md](TESTING.md).
+201 tests, no dependencies, and the whole thing runs offline in about half a minute. There's a
+fake Herdr socket, a fake `gh`, real git repositories in temp directories, and the actual host
+driven over the same native-messaging framing the browser uses. [TESTING.md](TESTING.md) has
+the details.
 
 ## How it works
 
@@ -93,15 +100,16 @@ Dia side panel ── native messaging ── host/bridge.mjs ── ~/.config/h
   panel.js: view + buttons            transparent pipe        workspaces · agents · events
 ```
 
-The host forwards anything the panel sends straight to Herdr and returns whatever Herdr
-answers; a handful of `dia.*` routes add the conveniences (the queue, launching, reading a
-review back). [AGENTS.md](AGENTS.md) explains the whole design — the routes, the wire facts,
-how sessions and worktrees are organised, and how to work on it.
+The host is mostly a pipe: whatever the panel sends goes straight to Herdr, and whatever Herdr
+answers comes straight back. On top of that sit a handful of `dia.*` routes for the things
+worth doing in one step, like building the queue or reading a review back out of an agent. If
+you want the whole design, [AGENTS.md](AGENTS.md) covers the routes, the protocol quirks, and
+how sessions and worktrees hang together.
 
 ## Not yet
 
-- Capturing Dia's chat reply automatically (today you paste it).
-- A `herdr-plugin.toml` so `herdr plugin install` does the registration.
-- Anything beyond PRs — issues, Slack threads — is the same route with a different brief.
+- Pulling Dia's reply in automatically. For now you paste it.
+- A `herdr-plugin.toml`, so `herdr plugin install` could do the registration for you.
+- Issues, Slack threads, anything that isn't a PR. Same machinery, different brief, not built.
 
 MIT licensed.

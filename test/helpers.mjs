@@ -167,7 +167,7 @@ export async function createEnv({ scenario = {}, herdr: herdrOptions = {}, env: 
 
   const herdr = await startFakeHerdr({ socketPath: path.join(home, 'herdr.sock'), ...herdrOptions });
 
-  const host = spawnHost({
+  const hostEnv = {
     PATH: `${path.join(home, '.local', 'bin')}:/usr/bin:/bin:/usr/sbin:/sbin`,
     HOME: home,
     TMPDIR: tmp,
@@ -178,14 +178,25 @@ export async function createEnv({ scenario = {}, herdr: herdrOptions = {}, env: 
     GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_CONFIG_SYSTEM: '/dev/null',
     ...extraEnv,
-  });
-  const child = host.child;
+  };
+  const host = spawnHost(hostEnv);
+  const running = [host];
 
   return {
     home, tmp, repos, herdr, host, scenarioFile, ghLog,
 
     // Rewrite the scenario the fake gh answers from, mid-test.
     setScenario(next) { writeJson(scenarioFile, next); },
+
+    // Close the panel and open it again: the host is a native-messaging child, so it dies with
+    // the panel and the next one starts fresh over the same $HOME. Anything it kept on disk has
+    // to earn its keep here.
+    restartHost() {
+      this.host.endStdin();
+      this.host = spawnHost(hostEnv);
+      running.push(this.host);
+      return this.host;
+    },
 
     // Every gh invocation the host made: { argv, cwd, ghConfigDir }.
     ghCalls() {
@@ -206,7 +217,7 @@ export async function createEnv({ scenario = {}, herdr: herdrOptions = {}, env: 
     },
 
     async cleanup() {
-      try { child.kill('SIGKILL'); } catch {}
+      for (const h of running) { try { h.child.kill('SIGKILL'); } catch {} }
       await herdr.close();
       try { fs.rmSync(home, { recursive: true, force: true }); } catch {}
     },

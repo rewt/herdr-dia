@@ -23,7 +23,7 @@
       <div id="pr-ref" class="pr-ref"></div>
       <textarea id="instruction" rows="4" placeholder="Optional for a review (focus). Required for an update: paste the change you and Dia agreed on."></textarea>
       <div class="row">
-        <button id="review" class="pill secondary" disabled>Review on my behalf</button>
+        <button id="review" class="pill secondary" disabled>Review with an agent</button>
         <button id="launch" class="pill" disabled>Update the PR</button>
       </div>
       <div id="progress" class="progress"></div>
@@ -35,7 +35,10 @@
     </section>
 
     <section class="card">
-      <div class="eyebrow">Review queue <span id="queue-count"></span></div>
+      <div class="eyebrow eyebrow-row">
+        <span>Review queue <span id="queue-count"></span></span>
+        <button id="queue-refresh" class="freshness" type="button" title="Refresh the queue"></button>
+      </div>
       <ul id="queue" class="queue"></ul>
       <div id="queue-note" class="hint"></div>
     </section>

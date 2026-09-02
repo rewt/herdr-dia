@@ -11,6 +11,20 @@
 const ORG = 'orchard';
 const now = Date.now();
 
+const PEEKING_TEXT = `Reading orchard/orchard-api#776 — "Return 409 instead of 500 on duplicate crate ids"
+
+The status code is right, and the retry path terminates now, which it did not
+before. Two things I am still working through.
+
+First, whether the duplicate check races the insert when two pickers submit the
+same crate at once. The check and the write are not in one transaction, so I
+want to see what the unique index does under that load.
+
+Second, whether the existing callers treat 409 as retryable. The mobile client
+retries on any 4xx that is not 401, which would turn a duplicate into a loop.
+
+Still reading the callers. Nothing posted yet.`;
+
 const REVIEW_TEXT = `Reviewed orchard/orchard-sensors#482 — "Retry a stale moisture reading before skipping the zone"
 
 The retry is right for a single zone, but a gateway payload carrying more than one
@@ -36,6 +50,7 @@ const QUEUE = {
   favorites: [
     pr('orchard-web', 1184, 'd-quince', 'Keep the unsaved harvest plan when the tab reloads'),
     pr('orchard-api', 771, 'd-quince', 'Rate-limit ingest per block, not per gateway token'),
+    pr('orchard-api', 779, 'd-quince', 'Backfill the crate index in batches'),
     pr('orchard-sensors', 482, 'm-bramley', 'Retry a stale moisture reading before skipping the zone'),
     pr('orchard-harvest', 219, 'm-bramley', 'Split the staging scheduler off the shared queue'),
   ],
@@ -43,6 +58,8 @@ const QUEUE = {
     pr('orchard-web', 1190, 'octocat', 'Trace ids survive the grower sign-in redirect', { reviewDecision: 'APPROVED', mergeable: 'MERGEABLE' }),
     pr('orchard-harvest', 224, 'octocat', 'Pin the picker roster job to one worker', { reviewDecision: 'CHANGES_REQUESTED', mergeable: 'MERGEABLE' }),
     pr('orchard-api', 780, 'octocat', 'Drop the unused webhook retry queue', { reviewDecision: 'REVIEW_REQUIRED', mergeable: 'CONFLICTING' }),
+    pr('orchard-sensors', 488, 'octocat', 'Batch the gateway heartbeats into one write per block', { reviewDecision: 'REVIEW_REQUIRED', mergeable: 'MERGEABLE' }),
+    pr('orchard-web', 1195, 'octocat', 'Remember which block a grower was looking at between visits', { reviewDecision: 'REVIEW_REQUIRED', mergeable: 'MERGEABLE' }),
   ],
   brief: [
     pr('orchard-sensors', 482, 'm-bramley', 'Retry a stale moisture reading before skipping the zone', { reason: 'review_requested' }),
@@ -57,10 +74,6 @@ const QUEUE = {
     pr('orchard-harvest', 219, 'm-bramley', 'Split the staging scheduler off the shared queue'),
     pr('orchard-harvest', 221, 'j-medlar', 'Rotate the gateway enrolment keys'),
     pr('orchard-sensors', 482, 'm-bramley', 'Retry a stale moisture reading before skipping the zone'),
-    pr('orchard-sensors', 486, 'k-russet', 'Serve the last good reading when a gateway drops out'),
-    pr('orchard-web', 1184, 'd-quince', 'Keep the unsaved harvest plan when the tab reloads'),
-    pr('orchard-web', 1187, 's-pippin', 'Move the yield formatter into the shared package'),
-    pr('orchard-web', 1191, 'k-russet', 'Lazy-load the block map'),
   ],
   other: [
     { repo: `${ORG}/orchard-harvest`, reason: 'approval_requested', title: 'Deploy staging → production', url: `https://github.com/${ORG}/orchard-harvest/actions` },
@@ -83,11 +96,34 @@ const SESSIONS = [
     createdAt: new Date(now - 2 * 60000).toISOString(),
     url: `https://github.com/${ORG}/orchard-web/pull/1184`, paneId: 'p32',
   },
+  {
+    agentName: 'rv-776-orchard-api-c4d1', owner: ORG, repo: 'orchard-api', number: 776,
+    mode: 'review', title: 'Return 409 instead of 500 on duplicate crate ids',
+    createdAt: new Date(now - 1 * 60000).toISOString(),
+    url: `https://github.com/${ORG}/orchard-api/pull/776`, paneId: 'p33',
+  },
+  {
+    agentName: 'pr-219-orchard-harvest-b2e0', owner: ORG, repo: 'orchard-harvest', number: 219,
+    mode: 'implement', title: 'Split the staging scheduler off the shared queue',
+    createdAt: new Date(now - 14 * 60000).toISOString(),
+    url: `https://github.com/${ORG}/orchard-harvest/pull/219`, paneId: 'p34',
+  },
+  {
+    // Its agent is gone, so the board offers Dismiss rather than End.
+    agentName: 'rv-1191-orchard-web-9a3c', owner: ORG, repo: 'orchard-web', number: 1191,
+    mode: 'review', title: 'Lazy-load the block map',
+    createdAt: new Date(now - 40 * 60000).toISOString(),
+    url: `https://github.com/${ORG}/orchard-web/pull/1191`, paneId: null,
+  },
 ];
+
+const PEEKING = 'rv-776-orchard-api-c4d1';
 
 const AGENTS = [
   { name: 'rv-482-orchard-sensors-a1c3', kind: 'claude', pane_id: 'p31', agent_status: 'blocked', tab_id: 't7' },
   { name: 'pr-1184-orchard-web-7f20', kind: 'claude', pane_id: 'p32', agent_status: 'working', tab_id: 't8' },
+  { name: PEEKING, kind: 'claude', pane_id: 'p33', agent_status: 'working', tab_id: 't9' },
+  { name: 'pr-219-orchard-harvest-b2e0', kind: 'claude', pane_id: 'p34', agent_status: 'working', tab_id: 't10' },
 ];
 
 const ROUTES = {
@@ -104,7 +140,9 @@ const ROUTES = {
   'dia.worktrees': () => ({ worktrees: [
     { id: 'w1', owner: ORG, repo: 'orchard-web', number: 1184, branch: 'herdr-dia/pr-1184', clean: true, open: true },
   ] }),
-  'dia.review_text': () => ({ text: REVIEW_TEXT, result: { pr: `${ORG}/orchard-sensors#482`, recommendation: 'request changes', findings: FINDINGS } }),
+  'dia.review_text': ({ name }) => (name === PEEKING
+    ? { text: PEEKING_TEXT, result: null }
+    : { text: REVIEW_TEXT, result: { pr: `${ORG}/orchard-sensors#482`, recommendation: 'request changes', findings: FINDINGS } }),
   'agent.focus': () => ({ ok: true }),
 };
 
@@ -149,9 +187,10 @@ window.chrome = {
   storage: { local: { get: async (keys) => Object.fromEntries(keys.map((k) => [k, STORE[k]])), set: (o) => Object.assign(STORE, o) } },
 };
 
-// ---- ?view=… : open one view, then publish the height a capture needs -------
+// ---- capture support: ?view=… opens a view, ?only=… isolates one card ----------
 const PARAMS = new URLSearchParams(location.search);
 const VIEW = PARAMS.get('view');
+const ONLY = PARAMS.get('only');
 // A capture asks for zoom so the image is retina-sharp while the panel still lays out at the
 // width of a real side panel (Chrome clamps how small a headless window may be).
 if (PARAMS.get('zoom')) document.documentElement.style.zoom = PARAMS.get('zoom');
@@ -173,15 +212,63 @@ const OPEN = {
   settings: () => Boolean(document.getElementById('gear')?.click() ?? true),
   // The board expands a review the moment it is ready, so the button is already there.
   review: () => clickText('#agents button', 'Read review'),
+  // Peek reads a review that is still being written, so the row has to be opened first.
+  peek: () => {
+    const rows = [...document.querySelectorAll('#agents > li')];
+    for (const row of rows) {
+      const mine = row.textContent.includes('#776');
+      const open = row.querySelector('.session-body');
+      if (mine && !open) { row.querySelector('.session-head')?.click(); return false; }
+      if (!mine && open) { row.querySelector('.session-head')?.click(); return false; }
+    }
+    const row = rows.find((r) => r.textContent.includes('#776'));
+    const button = row && [...row.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Peek');
+    if (!button) return false;
+    button.click();
+    return true;
+  },
 };
 
-if (VIEW) {
+// One card at a time: the README shows each piece of the panel on its own.
+const CARD = {
+  'this-tab': '#pr-card',
+  active: '#active-card',
+  queue: '#queue',
+  settings: '#settings',
+};
+
+function isolate() {
+  const target = document.querySelector(CARD[ONLY] || '')?.closest('.card, .sheet');
+  if (!target) return null;
+  // Inline display:none, not the hidden attribute — panel.css sets display on .card, which
+  // would win over [hidden] and leave a sliver of the next card in the frame.
+  const hide = (el) => { if (el) el.style.display = 'none'; };
+  hide(document.querySelector('header'));
+  for (const card of document.querySelectorAll('#main > .card')) if (card !== target) hide(card);
+  if (target.classList.contains('sheet')) hide(document.getElementById('main'));
+  hide(document.getElementById('queue-note'));
+  return target;
+}
+
+// Publish the height the capture needs, in CSS pixels, so scripts/screenshots.mjs can frame
+// each card exactly. getBoundingClientRect() reports zoomed units, so undo the capture zoom.
+function publishHeight(target) {
+  const zoom = Number(PARAMS.get('zoom')) || 1;
+  const bottom = target ? target.getBoundingClientRect().bottom / zoom : document.documentElement.scrollHeight;
+  const meta = document.createElement('meta');
+  meta.name = 'capture-height';
+  meta.content = String(Math.ceil(bottom + 14));
+  document.head.append(meta);
+}
+
+if (VIEW || ONLY) {
   const open = OPEN[VIEW];
-  if (!open) console.warn(`no such view: ${VIEW}`);
-  // Wait for the panel's first render, then act. scripts/screenshots.mjs gives the page
-  // plenty of (virtual) time before it captures.
+  if (VIEW && !open) console.warn(`no such view: ${VIEW}`);
   let tries = 0;
   const attempt = setInterval(() => {
-    if ((open && open()) || ++tries > 40) clearInterval(attempt);
+    if (!open || open() || ++tries > 40) {
+      clearInterval(attempt);
+      setTimeout(() => publishHeight(isolate()), 300);
+    }
   }, 100);
 }

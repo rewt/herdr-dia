@@ -212,3 +212,187 @@ test('an empty GitHub answers with empty tiers, not an error', async () => {
     assert.deepEqual(q.knownAuthors, []);
   });
 });
+
+// ---------------------------------------------------------------- the queue cache
+// GitHub is the slow half of dia.queue (three calls, a second or so). It is memoised per
+// logical fetch so a filter change, a tab switch or an impatient second click is instant,
+// while everything computed locally stays live.
+
+test('a repeat queue re-uses the GitHub answers instead of re-asking', async () => {
+  await withEnv({ scenario }, async (env) => {
+    const first = await env.host.send('dia.queue', { reposRoot: env.repos });
+    const calls = env.ghCalls().length;
+    assert.ok(calls > 0, 'the first queue actually talks to GitHub');
+
+    const second = await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.equal(env.ghCalls().length, calls, 'the second queue asked GitHub nothing');
+    assert.deepEqual(second.team.map((p) => p.number), first.team.map((p) => p.number));
+    assert.deepEqual(second.mine.map((p) => p.number), first.mine.map((p) => p.number));
+  });
+});
+
+test('filters are applied locally, so changing one costs no GitHub call', async () => {
+  await withEnv({ scenario }, async (env) => {
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    const calls = env.ghCalls().length;
+
+    const filtered = await env.host.send('dia.queue', { reposRoot: env.repos, repos: ['team-repo'] });
+    const favoured = await env.host.send('dia.queue', { reposRoot: env.repos, favorites: ['bob'] });
+
+    assert.equal(env.ghCalls().length, calls, 'repo and favourite filters never re-fetch');
+    assert.deepEqual([...new Set(filtered.team.map((p) => p.repo))], ['team-repo']);
+    assert.deepEqual(favoured.favorites.map((p) => p.author), ['bob']);
+  });
+});
+
+test('switching Mine to closed re-asks for Mine only, and switching back is free', async () => {
+  await withEnv({ scenario }, async (env) => {
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    const notifications = env.ghCallsMatching(/notifications\?/).length;
+    const requested = env.ghCallsMatching(/--review-requested=@me/).length;
+
+    await env.host.send('dia.queue', { reposRoot: env.repos, mineState: 'closed' });
+    assert.equal(env.ghCallsMatching(/graphql/).length, 2, 'closed is a different question');
+    assert.equal(env.ghCallsMatching(/notifications\?/).length, notifications, 'notifications untouched');
+    assert.equal(env.ghCallsMatching(/--review-requested=@me/).length, requested, 'review requests untouched');
+
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.equal(env.ghCallsMatching(/graphql/).length, 2, 'switching back is served from memory');
+  });
+});
+
+test('a merge drops the memo, so the merged PR is gone from the next queue', async () => {
+  await withEnv({ scenario }, async (env) => {
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    const before = env.ghCallsMatching(/graphql/).length;
+
+    await env.host.send('dia.merge_pr', { owner: 'rewt', repo: 'herdr-dia', number: 40 });
+
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.ok(env.ghCallsMatching(/graphql/).length > before, 'the queue re-asked after the merge');
+  });
+});
+
+test('a GitHub blip serves the last good answer rather than emptying a tier', async () => {
+  // No memo at all, so the second queue really does re-ask and really does fail.
+  await withEnv({ scenario, env: { HERDR_DIA_QUEUE_TTL_MS: '0' } }, async (env) => {
+    const good = await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.ok(good.team.length, 'the first queue has team PRs');
+
+    env.setScenario({ ...scenario, fail: { requested: 'HTTP 502' } });
+    const after = await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.deepEqual(after.team.map((p) => p.number), good.team.map((p) => p.number),
+      'the tier holds its last good contents through the outage');
+  });
+});
+
+// The host is a native-messaging child: it dies when the side panel closes, so its memo is cold
+// on every reopen and the panel would pay GitHub's full second again. One JSON file under
+// ~/.herdr-dia carries the last answer across, and it is served once — immediately — while the
+// real fetch runs behind it.
+
+test('the queue is remembered on disk between panel sessions', async () => {
+  await withEnv({ scenario }, async (env) => {
+    const first = await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.equal(first.stale, undefined, 'a fetched answer is not stale');
+    assert.equal(fs.readdirSync(env.statePath('queue-cache')).length, 1, 'the answer was written down, under one identity');
+
+    env.restartHost();
+    const calls = env.ghCalls().length;
+
+    const reopened = await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.equal(reopened.stale, true, 'the reopened panel is told this came from memory');
+    assert.deepEqual(reopened.team.map((p) => p.number), first.team.map((p) => p.number),
+      'and it is the queue it had before');
+    assert.ok(env.ghCalls().length >= calls, 'GitHub is re-asked behind the answer, not in front of it');
+  });
+});
+
+test('the remembered answer is served once, then the fresh one takes over', async () => {
+  await withEnv({ scenario }, async (env) => {
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    env.restartHost();
+
+    const warm = await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.equal(warm.stale, true);
+
+    // The refetch it kicked off lands in the memo; the panel's follow-up gets the real thing.
+    await new Promise((r) => setTimeout(r, 300));
+    const fresh = await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.equal(fresh.stale, undefined, 'the second ask is a real answer');
+  });
+});
+
+test('Refresh forces a real fetch, past both the memo and the remembered answer', async () => {
+  await withEnv({ scenario }, async (env) => {
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    const calls = env.ghCalls().length;
+
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.equal(env.ghCalls().length, calls, 'an ordinary re-ask is still served from the memo');
+
+    const forced = await env.host.send('dia.queue', { reposRoot: env.repos, force: true });
+    assert.ok(env.ghCalls().length > calls, 'Refresh went to GitHub');
+    assert.equal(forced.stale, undefined, 'and what came back is fresh');
+  });
+});
+
+test('a forced refresh on a reopened panel skips the remembered answer entirely', async () => {
+  await withEnv({ scenario }, async (env) => {
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    env.restartHost();
+
+    const forced = await env.host.send('dia.queue', { reposRoot: env.repos, force: true });
+    assert.equal(forced.stale, undefined, 'Refresh never hands back yesterday’s note');
+  });
+});
+
+test('the queue says when GitHub actually answered', async () => {
+  await withEnv({ scenario }, async (env) => {
+    const before = Date.now();
+    const q = await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.ok(q.fetchedAt >= before && q.fetchedAt <= Date.now(), 'a fresh answer is stamped now');
+
+    env.restartHost();
+    const warm = await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.equal(warm.stale, true);
+    assert.ok(warm.fetchedAt <= q.fetchedAt + 5, 'a remembered answer carries its original age, not now');
+  });
+});
+
+// Two browser profiles, two GitHub logins, one machine. The identity is part of the identity of
+// the answer: neither login may ever be served the other's queue, from memory or from disk.
+test('two GitHub identities never see each other’s queue', async () => {
+  const mine = { ...scenario, mine: [minePr({ repo: 'herdr-dia', number: 40 })] };
+  await withEnv({ scenario: mine }, async (env) => {
+    const one = await env.host.send('dia.queue', { reposRoot: env.repos });
+    const calls = env.ghCalls().length;
+
+    // A second profile, signed in as somebody else, asking the same question.
+    const two = await env.host.send('dia.queue', { reposRoot: env.repos, ghConfigDir: '~/.config/gh-other' });
+    assert.ok(env.ghCalls().length > calls, 'the other login is asked for its own answer, never handed this one');
+    for (const call of env.ghCalls().slice(calls)) {
+      assert.match(call.ghConfigDir, /\.config\/gh-other$/, 'and asked as itself');
+    }
+    assert.equal(two.stale, undefined, 'a login with no history of its own starts cold, not warm');
+    assert.ok(one.mine.length >= 0);
+
+    // Each identity keeps its own file, so neither can read or clobber the other.
+    assert.equal(fs.readdirSync(env.statePath('queue-cache')).length, 2, 'one file per identity');
+  });
+});
+
+test('a merge under one identity leaves the other identity’s memo alone', async () => {
+  await withEnv({ scenario }, async (env) => {
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    await env.host.send('dia.queue', { reposRoot: env.repos, ghConfigDir: '~/.config/gh-other' });
+    // Count only the queue's own calls: merging makes gh calls of its own.
+    const queueCalls = () => env.ghCallsMatching(/notifications\?|--review-requested|graphql/).length;
+    const before = queueCalls();
+
+    await env.host.send('dia.merge_pr', { owner: 'rewt', repo: 'herdr-dia', number: 40, ghConfigDir: '~/.config/gh-other' });
+
+    await env.host.send('dia.queue', { reposRoot: env.repos });
+    assert.equal(queueCalls(), before, 'the untouched identity is still served from its memo');
+  });
+});
