@@ -605,7 +605,7 @@ async function removeWorktree({ id, force = false }) {
 // GitHub's answers are the slow part of dia.queue — three calls, roughly 400-900ms each — and
 // the panel re-asks on every filter change and every 20s tick. They are also the *stable*
 // part: a list of pull requests changes on the order of minutes. So they are memoised here,
-// while everything derived from them (the repo filter, favourites, agent status, review
+// while everything derived from them (the repo filter, favorites, agent status, review
 // results) is recomputed on every call. A cache hit is still an accurate picture of what is
 // running on this machine right now; only GitHub's half is remembered.
 //

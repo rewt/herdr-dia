@@ -34,7 +34,7 @@ review and read what it has so far.</p>
 PR is approved and mergeable.</p>
 </td>
 <td width="50%" valign="top">
-<img src="docs/screenshots/queue-favorites.png" width="100%" alt="The review queue on the Favourites tab, pull requests grouped under the author who opened them">
+<img src="docs/screenshots/queue-favorites.png" width="100%" alt="The review queue on the Favorites tab, pull requests grouped under the author who opened them">
 <p><b>Follow the people you work with.</b> Their PRs get pulled out of the pile and grouped by
 author, so the ones you actually review come first.</p>
 </td>
@@ -63,7 +63,7 @@ be yours.
 
 ## What you get
 
-- **A queue worth opening.** Five tabs (Favourites, Mine, Brief, Team, Other) built from your
+- **A queue worth opening.** Five tabs (Favorites, Mine, Brief, Team, Other) built from your
   GitHub notifications and review requests. Narrow it to the repos you care about, and the
   people you follow get pulled to the top.
 - **Review with an agent.** Claude Code reads the PR in plan mode, so while it works it can't
@@ -88,7 +88,7 @@ update, and in plan mode the finished review sits in the panel until you say pos
 npm test
 ```
 
-201 tests, no dependencies, and the whole thing runs offline in about half a minute. There's a
+223 tests, no dependencies, and the whole thing runs offline in about half a minute. There's a
 fake Herdr socket, a fake `gh`, real git repositories in temp directories, and the actual host
 driven over the same native-messaging framing the browser uses. [TESTING.md](TESTING.md) has
 the details.
@@ -105,6 +105,11 @@ answers comes straight back. On top of that sit a handful of `dia.*` routes for 
 worth doing in one step, like building the queue or reading a review back out of an agent. If
 you want the whole design, [AGENTS.md](AGENTS.md) covers the routes, the protocol quirks, and
 how sessions and worktrees hang together.
+
+[REPORT.md](REPORT.md) is the short version, also at
+[herdr-dia.kevgibson.com](https://herdr-dia.kevgibson.com): what it does today, what a version
+built into Dia could do, and the tradeoffs. [HANDOFF.md](HANDOFF.md) is the design document behind it,
+with the decision records under [docs/adr](docs/adr/README.md).
 
 ## Not yet
 

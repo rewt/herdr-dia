@@ -2,6 +2,11 @@
 // Serve the real panel against fixture data — no Herdr, no GitHub, no native host.
 //
 //   node scripts/demo.mjs        # then open the printed URL
+//   node scripts/demo.mjs 8750   # a port of your choice (or PORT=8750)
+//
+// The default port is 8742. If something is already listening there (usually an earlier demo
+// that was never stopped), the next free port is used and the printed URL says which. A port
+// given explicitly is never changed: the demo stops and says so instead.
 //
 // panel.html/.css/.js are served straight from extension/ (unmodified); the only change is
 // one injected <script> that installs a fake `chrome` object answering the host's routes with
@@ -14,7 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, extname } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const port = Number(process.argv[2] || process.env.PORT || 8742);
+const requested = process.argv[2] || process.env.PORT;
+let port = Number(requested || 8742);
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -53,8 +59,19 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(port, () => {
+server.on('error', (error) => {
+  if (error.code !== 'EADDRINUSE') throw error;
+  if (requested || port >= 8742 + 20) {
+    console.error(`port ${port} is already in use. Stop whatever is listening there, or pick another: node scripts/demo.mjs 8750`);
+    process.exit(1);
+  }
+  console.error(`port ${port} is in use (an earlier demo is probably still running there); trying ${port + 1}`);
+  port += 1;
+  server.listen(port);
+});
+server.on('listening', () => {
   console.log(`herdr-dia demo panel: http://localhost:${port}/`);
   console.log('Fixture data only — every repository, author and pull request in it is invented.');
   console.log('The panel is ~400px wide in a browser side panel; narrow the window to match.');
 });
+server.listen(port);

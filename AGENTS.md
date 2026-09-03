@@ -124,7 +124,7 @@ Host log: `$TMPDIR/herdr-dia-host.log`.
 | `dia.review_text` | Reads a finished review back out of the agent (plan file, or its scrollback). |
 | `dia.proceed` | Sends the user's instruction and answers Claude's own dialogs on their behalf. |
 | `dia.merge_pr` | Merges one of the user's own PRs, with a method the repo allows. |
-| `dia.resolve_user` | Checks a typed favourite against the GitHub API. |
+| `dia.resolve_user` | Checks a typed favorite against the GitHub API. |
 | `dia.worktrees` / `dia.remove_worktree` | List update worktrees; remove one (never with `--force`, always keeping the branch). |
 | `dia.end_session` / `dia.dismiss_session` | Close a session out (tab + worktree), or just forget it. |
 
@@ -132,7 +132,7 @@ Host log: `$TMPDIR/herdr-dia-host.log`.
 
 Five tiers, from `gh api notifications` and `gh search prs`:
 
-- **Favourites** — PRs by authors the user marked, *pulled out* of brief/team and grouped by
+- **Favorites** — PRs by authors the user marked, *pulled out* of brief/team and grouped by
   author. Prioritizing, not filtering.
 - **Mine** — the user's own PRs (one GraphQL query for `reviewDecision` + `mergeable`, with a
   REST search as fallback so the tier is never empty on an enrichment error). Open hides drafts;
@@ -148,7 +148,7 @@ Each PR is decorated with any review result already written for it and any agent
 Answers are memoised, because GitHub's three calls are the slow part (roughly 400-900 ms each)
 and the panel re-asks on every filter change and every 20-second tick, while the underlying
 lists change on the order of minutes. Only GitHub's half is remembered: the repo filter,
-favourites, live agent status and review results are recomputed on every call, so a cache hit is
+favorites, live agent status and review results are recomputed on every call, so a cache hit is
 still an accurate picture of what is running on this machine.
 
 - `HERDR_DIA_QUEUE_TTL_MS` (default 10 s) is the freshness window. **Keep it under the panel's
@@ -242,7 +242,7 @@ The gear opens the settings sheet; every dropdown is built from `dia.config`:
 - **Review default** — Plan (the agent proposes, you decide) or Auto (it posts directly).
   Updates always act in a worktree and ignore this.
 - **Repositories** — chips built from what's currently requesting review; none selected = all.
-- **Favourite users** — chips from the authors in the queue, or type a username and **Add** (it
+- **Favorite users** — chips from the authors in the queue, or type a username and **Add** (it
   is resolved against the GitHub API first, so a typo can't slip in).
 - **Unapproved PRs only** — on by default.
 - **Worktrees** — every update worktree with its branch and clean/dirty state, and Remove /

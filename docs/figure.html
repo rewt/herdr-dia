@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>herdr-dia · Storyboard</title>
+<style>
+  :root { --paper: #F8F8F8; --ink: #1B1B1B; --muted: #6B6B6B; --rule: #EBEBEB; --accent: #FFDC5C; --link: #607CAA; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 1rem;
+           padding: 0.7rem 1.2rem; background: rgba(248,248,248,0.94); backdrop-filter: blur(8px);
+           border-bottom: 1px solid var(--rule); }
+  h1 { margin: 0; font-size: 0.9rem; font-weight: 600; }
+  .spacer { flex: 1; }
+  .hint { font-size: 0.78rem; color: var(--muted); }
+  button.close { display: inline-flex; align-items: center; gap: 0.45rem; font: inherit; font-size: 0.8rem;
+                 font-weight: 600; background: var(--accent); color: var(--ink); border: 0; border-radius: 999px;
+                 padding: 0.42em 0.95em; cursor: pointer; }
+  button.close:hover { filter: brightness(0.96); }
+  button.close:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  main { overflow: auto; padding: 1.2rem; }
+  img { display: block; width: 100%; height: auto; min-width: 1200px; }
+  footer { padding: 0 1.2rem 1.4rem; font-size: 0.82rem; color: var(--muted); }
+  a { color: var(--link); }
+</style>
+</head>
+<body>
+<header>
+  <h1>herdr-dia · storyboard</h1>
+  <span class="spacer"></span>
+  <span class="hint">Zoom the page to read the small text</span>
+  <button class="close" type="button" id="close" aria-label="Close and go back to the report">Close <span aria-hidden="true">✕</span></button>
+</header>
+<main><img src="storyboard.svg" alt="herdr-dia in Dia: the Morning Brief handing a pull request to an agent, the agent working beside the page, the finished review with its decision in the chat, and the settings"></main>
+<footer>Esc closes this. <a href="./">Back to the report</a> · <a href="storyboard.svg">The SVG itself</a></footer>
+<script>
+  // Opened in its own tab, close it. Opened in place, or if the browser refuses to close a tab
+  // it did not open with script, fall back to the report.
+  var leave = function () {
+    window.close();
+    setTimeout(function () { window.location.href = './'; }, 120);
+  };
+  document.getElementById('close').addEventListener('click', leave);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' || e.key === 'Esc') leave(); });
+</script>
+</body>
+</html>

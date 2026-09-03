@@ -809,7 +809,7 @@ function option(value, label, selected) {
 // restore the saved selections.
 // The panel's own preferences live in chrome.storage and need no host at all. They have to be
 // read before the first dia.queue goes out — otherwise that queue asks GitHub the wrong
-// question (the default identity, no favourites, no repo filter) and its answer stands until
+// question (the default identity, no favorites, no repo filter) and its answer stands until
 // the 20s tick finally replaces it.
 const SETTING_KEYS = ['reposRoot', 'ghConfigDir', 'claudeConfigDir', 'kind', 'planMode', 'focus', 'repos', 'favorites', 'onlyUnapproved', 'mineState'];
 

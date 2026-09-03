@@ -239,7 +239,7 @@ test('filters are applied locally, so changing one costs no GitHub call', async 
     const filtered = await env.host.send('dia.queue', { reposRoot: env.repos, repos: ['team-repo'] });
     const favoured = await env.host.send('dia.queue', { reposRoot: env.repos, favorites: ['bob'] });
 
-    assert.equal(env.ghCalls().length, calls, 'repo and favourite filters never re-fetch');
+    assert.equal(env.ghCalls().length, calls, 'repo and favorite filters never re-fetch');
     assert.deepEqual([...new Set(filtered.team.map((p) => p.repo))], ['team-repo']);
     assert.deepEqual(favoured.favorites.map((p) => p.author), ['bob']);
   });

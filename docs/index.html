@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>herdr-dia · Prototype report</title>
+<meta name="description" content="The Morning Brief knows which pull requests need you. This prototype lets you act on them from the browser. This report says what it does today, what a version built into Dia could do, and the tradeoffs behind that.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400..600,0..100&family=Inter:wght@400;500;600;650&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper: #F8F8F8; --sheet: #FFFFFF; --ink: #1B1B1B; --muted: #6B6B6B; --faint: #9A9A9A;
+    --rule: #EBEBEB; --rule-strong: #D9D9D9; --accent: #FFDC5C; --accent-soft: #F2FCB3;
+    --link: #607CAA; --shadow: 0 4px 32px rgba(0,0,0,0.06);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 15.5px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: var(--link); text-decoration: none; border-bottom: 1px solid var(--rule-strong); }
+  a:hover { border-bottom-color: var(--link); }
+  code { font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.86em; background: #F1F1F1; padding: 0.1em 0.38em; border-radius: 0.4rem; }
+  .sheet { max-width: 52rem; margin: 2.5rem auto 4rem; background: var(--sheet); border-radius: 1.6rem; box-shadow: var(--shadow); padding: 3.2rem 3.4rem 3.6rem; }
+  .kicker { display: inline-block; font-size: 0.74rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; background: var(--accent); padding: 0.28em 0.8em; border-radius: 999px; margin: 0 0 1.3rem; }
+  h1 { font-family: "Fraunces", Georgia, "Times New Roman", serif; font-weight: 500; font-size: 3.4rem; letter-spacing: -0.02em; line-height: 1; margin: 0 0 0.6rem; font-variation-settings: "opsz" 144, "SOFT" 50; }
+  .dek { font-size: 1.22rem; line-height: 1.45; color: var(--muted); margin: 0 0 0.6rem; max-width: 38rem; text-wrap: pretty; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.4rem; font-size: 0.92rem; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 1rem 0; margin: 0 0 1.6rem; }
+  .meta dt { color: var(--muted); margin: 0; }
+  .meta dd { margin: 0; }
+  nav.toc { font-size: 0.86rem; color: var(--muted); margin: 0 0 2.6rem; display: flex; flex-wrap: wrap; gap: 0.3rem 0; }
+  nav.toc a { color: var(--muted); border: 0; }
+  nav.toc a:hover { color: var(--ink); }
+  nav.toc a + a::before { content: "·"; margin: 0 0.6em; color: var(--rule-strong); }
+  h2 { font-family: "Fraunces", Georgia, serif; font-weight: 500; font-size: 1.85rem; letter-spacing: -0.015em; line-height: 1.15; margin: 3rem 0 0.9rem; padding-top: 1.4rem; border-top: 1px solid var(--rule); font-variation-settings: "opsz" 72, "SOFT" 50; }
+  h3 { font-size: 1.02rem; font-weight: 650; margin: 1.9rem 0 0.5rem; letter-spacing: -0.005em; }
+  p { margin: 0 0 1rem; text-wrap: pretty; }
+  p.caption { font-size: 0.82rem; color: var(--muted); margin: 0.4rem 0 0.3rem; }
+  pre { background: #F3F3F3; border-radius: 0.8rem; padding: 0.9rem 1.1rem; overflow-x: auto; font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.78rem; line-height: 1.5; margin: 0 0 1.2rem; }
+  pre code { background: none; padding: 0; font-size: inherit; border-radius: 0; }
+  ul, ol { padding-left: 1.3rem; margin: 0 0 1.1rem; }
+  li { margin: 0 0 0.45rem; padding-left: 0.2rem; }
+  li::marker { color: var(--faint); }
+  table { border-collapse: collapse; width: 100%; margin: 0.4rem 0 1.4rem; font-size: 0.92rem; }
+  th { text-align: left; font-weight: 600; font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 0.45rem 0.7rem 0.45rem 0; border-bottom: 1px solid var(--rule-strong); }
+  td { vertical-align: top; padding: 0.55rem 0.7rem 0.55rem 0; border-bottom: 1px solid var(--rule); }
+  td:first-child { width: 24%; }
+  table.kv td:first-child { color: var(--muted); width: 26%; }
+  figure.shot { margin: 0.6rem auto 0.4rem; max-width: 26rem; }
+  figure.shot img { width: 100%; border-radius: 0.9rem; border: 1px solid var(--rule); display: block; }
+  figure.wire { margin: 0.6rem 0 0.4rem; }
+  figure.wire a { display: block; position: relative; border: 0; cursor: zoom-in; }
+  figure.wire svg { width: 100%; height: auto; border-radius: 1rem; border: 1px solid var(--rule); display: block; }
+  .wire-open { position: absolute; right: 0.7rem; bottom: 0.7rem; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.02em; color: var(--ink); background: var(--accent); padding: 0.3em 0.75em; border-radius: 999px; }
+  footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--rule); font-size: 0.82rem; color: var(--muted); }
+  @media (max-width: 700px) { .sheet { padding: 2rem 1.3rem; border-radius: 1rem; margin: 1rem; } h1 { font-size: 2.5rem; } }
+  @page { size: A4; margin: 16mm 15mm 18mm; }
+  @page wire { size: A4 landscape; margin: 9mm 12mm; }
+  @media print {
+    html, body { background: #fff; }
+    .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; border-radius: 0; }
+    body { font-size: 10.6pt; line-height: 1.5; }
+    pre { font-size: 7.5pt; white-space: pre-wrap; page-break-inside: avoid; }
+    h1 { font-size: 30pt; } h2 { font-size: 17pt; margin-top: 1.6rem; page-break-after: avoid; } h3 { page-break-after: avoid; }
+    .dek { font-size: 12.5pt; }
+    nav.toc { display: none; }
+    a { color: var(--ink); border: 0; }
+    tr, li { page-break-inside: avoid; }
+    p + table { page-break-before: avoid; }
+    figure.shot { max-width: 80mm; page-break-inside: avoid; }
+    section.wire-page { page: wire; break-before: page; break-after: page; }
+    section.wire-page h2 { margin-top: 0; padding-top: 0; border-top: 0; font-size: 15pt; }
+    section.wire-page p { font-size: 9.5pt; margin: 0 0 0.5rem; }
+    figure.wire { margin: 0; }
+    figure.wire svg { border: 0; border-radius: 0; height: 158mm; width: auto; max-width: 100%; display: block; margin: 0 auto; }
+    .wire-open { display: none; }
+  }
+</style>
+</head>
+<body>
+<article class="sheet">
+  <header>
+    <div class="kicker">Prototype report</div>
+    <h1>herdr-dia</h1>
+    <p class="dek">The Morning Brief knows which pull requests need you. This prototype lets you act on them from the browser. This report says what it does today, what a version built into Dia could do, and the tradeoffs behind that.</p>
+  </header>
+<h2 id="01-where-this-came-from">01 · Where this came from</h2>
+<p>I saw the posting for the AI Prototyper role, and I had been using Herdr to manage my coding agents. Dia's chat can read a pull request I have on screen and talk it through with me, but it could not dispatch an agent to review that pull request or send it off to do something different. That gap was the whole idea, and this extension was built to close it. Here is what I found.</p>
+<h2 id="02-what-it-does-today">02 · What it does today</h2>
+<table class="grid"><thead><tr><th>In the panel</th><th>What it does</th></tr></thead><tbody><tr><td>Track pull requests</td><td>Your own pull requests and your team's in a single view, under whichever GitHub identity the panel is signed in as. Five tabs: Favorites for the people you follow, Mine, Brief for what is addressed to you, Team, and Other.</td></tr><tr><td>Dispatch a review</td><td>The review requests that fill your brief arrive in the panel from GitHub. Any one of them goes to a coding agent running on your machine, in your own checkout, signed in as you. A setting decides how much it may do on its own: Plan has it propose and wait for you, Auto lets it post the review itself.</td></tr><tr><td>Chat with the agent</td><td>A field under the review sends whatever you want to say straight to the session, whether it is still working or finished. Post as comment and Apply the fixes are that field with the words already filled in.</td></tr><tr><td>Return findings</td><td>The agent comes back with findings by severity, each with file and line, what is wrong, and a fix. Your job moves from reading the diff to judging what it found.</td></tr><tr><td>Track and merge</td><td>Mine shows where each of your own pull requests stands, and Merge comes alive once one is approved and mergeable.</td></tr><tr><td>Monitor from the browser</td><td>The Active board carries every session the panel started, with its live state, and Peek reads a review while the agent is still writing it. Nothing needs a terminal to check on.</td></tr><tr><td>Start from the page you are on</td><td>Open any pull request in any tab and the panel offers it: review it, or describe a change and let an agent make it in a git worktree of its own, leaving your checkout untouched.</td></tr></tbody></table>
+<figure class="shot"><img src="screenshots/active-review.png" alt="The Active board with a review ready: findings by severity with file and line, a recommendation, the review text, an instruction field, and Post as comment and Apply the fixes"></figure>
+<p class="caption">Figure 1. A review that is ready. The panel is rendered here against fictional data.</p>
+<p>It is a browser extension and a small local process, <a href="https://github.com/rewt/herdr-dia">public under MIT</a>, and it works with whichever coding agent the local runtime has installed. It took two evenings, and I have used it every day since, which at the time of writing is not many days.</p>
+<h2 id="03-the-questions-it-left-me-with">03 · The questions it left me with</h2>
+<h3>Are the reviews any good?</h3>
+<p>This is the first thing I would build next. Every review already ends in one line of structured findings, and a review can be launched without the browser, so the harness is small: pull requests with seeded defects and an answer key, run past each agent and each variant of the brief, several runs each, scored on the seeded findings the agent caught against the ones it invented, with the recommendation checked as well. The first fixture exists. Until that runs, nobody should trust the reviews, and that includes me.</p>
+<h3>Does the shape match how other people review?</h3>
+<p>I designed this for one reader, and Peek exists because I wanted it once during a long review. The layout is a guess that has been sitting still long enough to look like a decision. A handful of people using it for a week on their own repositories, watched rather than surveyed, would tell me more than any further building.</p>
+<h3>Does it hold up against GitHub's API?</h3>
+<p>The panel refreshes every twenty seconds, and each refresh is three calls, so an open panel spends roughly 540 calls an hour against a personal token's 5,000. That is comfortable for one window and less so for several profiles left open all day, and each call takes between 400 and 900 milliseconds, which is what the cache in front of it exists to hide. The harder limit is that both lists stop at 100 items, so at enterprise volume the queue quietly drops what it cannot fit. A version built into the browser and talking to GitHub as an app would share one quota across an installation, which is a different problem again.</p>
+<h3>How do you filter a list nobody chose for you?</h3>
+<p>At work my review is requested on more open pull requests than one fetch returns, across dozens of repositories, and almost none of it because a person picked me. It arrives through team rules and code owners that were never meant to address me personally. Favorites, the repository filter and a default that hides approved pull requests are a start, and they are crude. Working out what deserves a person's attention is most of the product, and the Morning Brief already answers that question better than I can from outside it.</p>
+<h3>What happens across profiles and identities?</h3>
+<p>Dia has profiles, the extension has a GitHub identity picker, and the two know nothing about each other. A session records no identity today, so switching accounts leaves the other account's agents on the board, which is a known defect with a known fix. Under it is a question I have not looked at: what a running agent should be allowed to see when the person switches profiles, and what a work profile and a personal one owe each other on the same machine.</p>
+<section class="wire-page"><h2 id="04-where-it-could-go">04 · Where it could go</h2>
+<p>Built into the browser, the brief's own list carries the action and a running agent is a card in the tab's chat. The finished review lands in the conversation where you discussed the diff with Dia, and your reply is the approval, which is the one step an extension can never do. The storyboard below is how I would want that to look.</p><figure class="wire"><a href="figure.html" target="_blank" rel="noopener" title="Open the drawing full size"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1020" width="1200" height="1020" font-family='-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif' role="img" aria-labelledby="t d">
+<title id="t">herdr-dia, as it would look in Dia</title>
+<desc id="d">Four drawings. One: the Morning Brief listing pull requests waiting on the reader, each with a Review with an agent button. Two: a pull request tab with the chat beside the page, showing a running agent session and the partial review it has written so far. Three: the same tab with the finished review, a recommendation to request changes, two findings with file and line, and Post as comment and Apply the fixes buttons above a field for replying to the agent. Four: the settings, with the repos root, GitHub identity, coding agent, review default of Plan or Auto, repository and favorite author filters, and a checkbox for unapproved pull requests only.</desc>
+<rect x="0" y="0" width="1200" height="1020" rx="0" fill="#F8F8F8" stroke="none" stroke-width="1"/>
+<text x="24" y="32" font-size="19" fill="#1B1B1B" font-weight="700" text-anchor="start" font-family='Georgia, "Times New Roman", serif'>herdr-dia, as it would look in Dia</text>
+<text x="24" y="52" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">Four moments in a morning: the brief hands a pull request to an agent, the agent works beside the page, the review comes back with the decision next to it, and the settings decide who and what runs.</text>
+<circle cx="35" cy="81" r="11" fill="#FFDC5C"/>
+<text x="35" y="85.5" font-size="12" fill="#1B1B1B" font-weight="700" text-anchor="middle">1</text>
+<text x="54" y="86" font-size="12" fill="#6B6B6B" font-weight="600" text-anchor="start">The brief hands one over</text>
+<rect x="24" y="96" width="556" height="420" rx="12" fill="#fff" stroke="#BDBDBD" stroke-width="1"/>
+<rect x="36" y="104" width="108" height="24" rx="8" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="48" y="120" font-size="11" fill="#1B1B1B" font-weight="500" text-anchor="start">Morning Brief</text>
+<rect x="150" y="104" width="133" height="24" rx="8" fill="#F0F0F0" stroke="none" stroke-width="1"/>
+<text x="162" y="120" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">orchard-web #1184</text>
+<rect x="289" y="104" width="62" height="24" rx="8" fill="#F0F0F0" stroke="none" stroke-width="1"/>
+<text x="301" y="120" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">+</text>
+<rect x="36" y="136" width="532" height="26" rx="13" fill="#F3F3F3" stroke="none" stroke-width="1"/>
+<text x="50" y="153" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">dia://brief</text>
+<rect x="494" y="139" width="66" height="20" rx="10" fill="#1B1B1B" stroke="#1B1B1B" stroke-width="1"/>
+<text x="527" y="152.6" font-size="10" fill="#fff" font-weight="500" text-anchor="middle">Ask Dia</text>
+<line x1="24" y1="172" x2="580" y2="172" stroke="#E3E3E3" stroke-width="1"/>
+<text x="46" y="202" font-size="20" fill="#1B1B1B" font-weight="700" text-anchor="start" font-family='Georgia, "Times New Roman", serif'>Tuesday</text>
+<text x="134" y="202" font-size="12" fill="#6B6B6B" font-weight="400" text-anchor="start">Morning Brief</text>
+<text x="46" y="230" font-size="9" fill="#6B6B6B" font-weight="700" text-anchor="start">CALENDAR</text>
+<rect x="46" y="240" width="300" height="6" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="46" y="252" width="220" height="6" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<text x="46" y="280" font-size="9" fill="#6B6B6B" font-weight="700" text-anchor="start">PULL REQUESTS WAITING ON YOU</text>
+<rect x="46" y="290" width="512" height="56" rx="10" fill="#fff" stroke="#EBEBEB" stroke-width="1"/>
+<circle cx="60" cy="309" r="4" fill="#D6D6D6"/>
+<text x="72" y="313" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">orchard/orchard-web #1184</text>
+<text x="72" y="331" font-size="12" fill="#1B1B1B" font-weight="500" text-anchor="start">Keep the unsaved harvest plan when the tab reloads</text>
+<rect x="400" y="305" width="142" height="24" rx="12" fill="#fff" stroke="#1B1B1B" stroke-width="1"/>
+<text x="471" y="320.96" font-size="11" fill="#1B1B1B" font-weight="500" text-anchor="middle">Review with an agent</text>
+<rect x="46" y="352" width="512" height="56" rx="10" fill="#fff" stroke="#EBEBEB" stroke-width="1"/>
+<circle cx="60" cy="371" r="4" fill="#D6D6D6"/>
+<text x="72" y="375" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">orchard/orchard-sensors #482</text>
+<text x="72" y="393" font-size="12" fill="#1B1B1B" font-weight="500" text-anchor="start">Retry a stale moisture reading before skipping the zone</text>
+<rect x="400" y="367" width="142" height="24" rx="12" fill="#fff" stroke="#1B1B1B" stroke-width="1"/>
+<text x="471" y="382.96" font-size="11" fill="#1B1B1B" font-weight="500" text-anchor="middle">Review with an agent</text>
+<rect x="46" y="414" width="512" height="56" rx="10" fill="#fff" stroke="#EBEBEB" stroke-width="1"/>
+<circle cx="60" cy="433" r="4" fill="#D6D6D6"/>
+<text x="72" y="437" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">orchard/orchard-api #776</text>
+<text x="72" y="455" font-size="12" fill="#1B1B1B" font-weight="500" text-anchor="start">Return 409 instead of 500 on duplicate crate ids</text>
+<rect x="400" y="429" width="142" height="24" rx="12" fill="#fff" stroke="#1B1B1B" stroke-width="1"/>
+<text x="471" y="444.96" font-size="11" fill="#1B1B1B" font-weight="500" text-anchor="middle">Review with an agent</text>
+<text x="46" y="494" font-size="9" fill="#6B6B6B" font-weight="700" text-anchor="start">INBOX</text>
+<rect x="46" y="504" width="260" height="6" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<circle cx="631" cy="81" r="11" fill="#FFDC5C"/>
+<text x="631" y="85.5" font-size="12" fill="#1B1B1B" font-weight="700" text-anchor="middle">2</text>
+<text x="650" y="86" font-size="12" fill="#6B6B6B" font-weight="600" text-anchor="start">The agent works beside the page</text>
+<rect x="620" y="96" width="556" height="420" rx="12" fill="#fff" stroke="#BDBDBD" stroke-width="1"/>
+<rect x="632" y="104" width="108" height="24" rx="8" fill="#F0F0F0" stroke="none" stroke-width="1"/>
+<text x="644" y="120" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">Morning Brief</text>
+<rect x="746" y="104" width="143" height="24" rx="8" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="758" y="120" font-size="11" fill="#1B1B1B" font-weight="500" text-anchor="start">orchard-web #1184</text>
+<circle cx="877" cy="116" r="3.5" fill="#607CAA"/>
+<rect x="895" y="104" width="62" height="24" rx="8" fill="#F0F0F0" stroke="none" stroke-width="1"/>
+<text x="907" y="120" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">+</text>
+<rect x="632" y="136" width="532" height="26" rx="13" fill="#F3F3F3" stroke="none" stroke-width="1"/>
+<text x="646" y="153" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">github.com/orchard/orchard-web/pull/1184</text>
+<rect x="1090" y="139" width="66" height="20" rx="10" fill="#1B1B1B" stroke="#1B1B1B" stroke-width="1"/>
+<text x="1123" y="152.6" font-size="10" fill="#fff" font-weight="500" text-anchor="middle">Ask Dia</text>
+<line x1="620" y1="172" x2="1176" y2="172" stroke="#E3E3E3" stroke-width="1"/>
+<text x="638" y="202" font-size="11" fill="#1B1B1B" font-weight="600" text-anchor="start">Keep the unsaved harvest plan</text>
+<text x="638" y="216" font-size="11" fill="#1B1B1B" font-weight="600" text-anchor="start">when the tab reloads</text>
+<text x="638" y="232" font-size="10" fill="#6B6B6B" font-weight="400" text-anchor="start">#1184 · d-quince · 2 commits</text>
+<text x="638" y="254" font-size="10" fill="#6B6B6B" font-weight="600" text-anchor="start">Files changed  2</text>
+<rect x="638" y="262" width="222" height="114" rx="6" fill="#FBFBFB" stroke="#EBEBEB" stroke-width="1"/>
+<text x="648" y="278" font-size="9.5" fill="#6B6B6B" font-weight="400" text-anchor="start">src/checkout.js</text>
+<rect x="648" y="288" width="140" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="302" width="180" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="316" width="110" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="330" width="190" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="344" width="130" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="358" width="160" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="638" y="386" width="222" height="100" rx="6" fill="#FBFBFB" stroke="#EBEBEB" stroke-width="1"/>
+<text x="648" y="402" font-size="9.5" fill="#6B6B6B" font-weight="400" text-anchor="start">test/checkout.test.mjs</text>
+<rect x="648" y="412" width="120" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="426" width="170" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="440" width="100" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="454" width="180" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="468" width="140" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="882" y="184" width="276" height="320" rx="12" fill="#FCFCFC" stroke="#EBEBEB" stroke-width="1"/>
+<text x="896" y="204" font-size="11" fill="#1B1B1B" font-weight="600" text-anchor="start">Chat · this tab</text>
+<text x="1144" y="204" font-size="10" fill="#6B6B6B" font-weight="400" text-anchor="end">Agents 2</text>
+<rect x="892" y="216" width="256" height="34" rx="8" fill="#fff" stroke="#EBEBEB" stroke-width="1"/>
+<circle cx="904" cy="233" r="4" fill="#607CAA"/>
+<text x="914" y="237" font-size="10.5" fill="#1B1B1B" font-weight="400" text-anchor="start">orchard-api #776 · reviewing…</text>
+<text x="1138" y="237" font-size="10" fill="#607CAA" font-weight="500" text-anchor="end">Peek ▸</text>
+<rect x="892" y="258" width="256" height="180" rx="8" fill="#fff" stroke="#EBEBEB" stroke-width="1"/>
+<circle cx="904" cy="275" r="4" fill="#607CAA"/>
+<text x="914" y="279" font-size="10.5" fill="#1B1B1B" font-weight="600" text-anchor="start">orchard-web #1184 · reviewing…</text>
+<text x="1138" y="279" font-size="10" fill="#607CAA" font-weight="500" text-anchor="end">Hide ▾</text>
+<text x="902" y="302" font-size="9" fill="#1B1B1B" font-weight="400" text-anchor="start">Reading the diff and the existing comments.</text>
+<text x="902" y="328" font-size="9" fill="#1B1B1B" font-weight="400" text-anchor="start">The session check is right for the signed-in</text>
+<text x="902" y="341" font-size="9" fill="#1B1B1B" font-weight="400" text-anchor="start">path. I am still working through what happens</text>
+<text x="902" y="354" font-size="9" fill="#1B1B1B" font-weight="400" text-anchor="start">when the session has lapsed: the basket is</text>
+<text x="902" y="367" font-size="9" fill="#1B1B1B" font-weight="400" text-anchor="start">resolved from a value on the request, and I</text>
+<text x="902" y="380" font-size="9" fill="#1B1B1B" font-weight="400" text-anchor="start">want to see whether anything re-checks who</text>
+<text x="902" y="393" font-size="9" fill="#1B1B1B" font-weight="400" text-anchor="start">owns it before it is returned. Nothing posted yet.</text>
+<rect x="892" y="460" width="256" height="32" rx="16" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="906" y="480" font-size="10.5" fill="#6B6B6B" font-weight="400" text-anchor="start" font-style="italic">Tell the agent how to proceed…</text>
+<circle cx="35" cy="541" r="11" fill="#FFDC5C"/>
+<text x="35" y="545.5" font-size="12" fill="#1B1B1B" font-weight="700" text-anchor="middle">3</text>
+<text x="54" y="546" font-size="12" fill="#6B6B6B" font-weight="600" text-anchor="start">The review comes back with the decision</text>
+<rect x="24" y="556" width="556" height="420" rx="12" fill="#fff" stroke="#BDBDBD" stroke-width="1"/>
+<rect x="36" y="564" width="108" height="24" rx="8" fill="#F0F0F0" stroke="none" stroke-width="1"/>
+<text x="48" y="580" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">Morning Brief</text>
+<rect x="150" y="564" width="143" height="24" rx="8" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="162" y="580" font-size="11" fill="#1B1B1B" font-weight="500" text-anchor="start">orchard-web #1184</text>
+<circle cx="281" cy="576" r="3.5" fill="#3F7A3F"/>
+<rect x="299" y="564" width="62" height="24" rx="8" fill="#F0F0F0" stroke="none" stroke-width="1"/>
+<text x="311" y="580" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">+</text>
+<rect x="36" y="596" width="532" height="26" rx="13" fill="#F3F3F3" stroke="none" stroke-width="1"/>
+<text x="50" y="613" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">github.com/orchard/orchard-web/pull/1184</text>
+<rect x="494" y="599" width="66" height="20" rx="10" fill="#1B1B1B" stroke="#1B1B1B" stroke-width="1"/>
+<text x="527" y="612.6" font-size="10" fill="#fff" font-weight="500" text-anchor="middle">Ask Dia</text>
+<line x1="24" y1="632" x2="580" y2="632" stroke="#E3E3E3" stroke-width="1"/>
+<text x="42" y="662" font-size="11" fill="#1B1B1B" font-weight="600" text-anchor="start">Keep the unsaved harvest plan</text>
+<text x="42" y="676" font-size="11" fill="#1B1B1B" font-weight="600" text-anchor="start">when the tab reloads</text>
+<text x="42" y="692" font-size="10" fill="#6B6B6B" font-weight="400" text-anchor="start">#1184 · d-quince · 2 commits</text>
+<text x="42" y="714" font-size="10" fill="#6B6B6B" font-weight="600" text-anchor="start">Files changed  2</text>
+<rect x="42" y="722" width="222" height="114" rx="6" fill="#FBFBFB" stroke="#EBEBEB" stroke-width="1"/>
+<text x="52" y="738" font-size="9.5" fill="#6B6B6B" font-weight="400" text-anchor="start">src/checkout.js</text>
+<rect x="52" y="748" width="140" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="52" y="762" width="180" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="52" y="776" width="110" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="52" y="790" width="190" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="52" y="804" width="130" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="52" y="818" width="160" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="42" y="846" width="222" height="100" rx="6" fill="#FBFBFB" stroke="#EBEBEB" stroke-width="1"/>
+<text x="52" y="862" font-size="9.5" fill="#6B6B6B" font-weight="400" text-anchor="start">test/checkout.test.mjs</text>
+<rect x="52" y="872" width="120" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="52" y="886" width="170" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="52" y="900" width="100" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="52" y="914" width="180" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="52" y="928" width="140" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="286" y="644" width="276" height="320" rx="12" fill="#FCFCFC" stroke="#EBEBEB" stroke-width="1"/>
+<text x="300" y="664" font-size="11" fill="#1B1B1B" font-weight="600" text-anchor="start">Chat · this tab</text>
+<text x="548" y="664" font-size="10" fill="#6B6B6B" font-weight="400" text-anchor="end">Agents 2</text>
+<rect x="296" y="676" width="256" height="34" rx="8" fill="#fff" stroke="#EBEBEB" stroke-width="1"/>
+<circle cx="308" cy="693" r="4" fill="#607CAA"/>
+<text x="318" y="697" font-size="10.5" fill="#1B1B1B" font-weight="400" text-anchor="start">orchard-api #776 · reviewing…</text>
+<text x="542" y="697" font-size="10" fill="#607CAA" font-weight="500" text-anchor="end">Peek ▸</text>
+<rect x="296" y="718" width="256" height="190" rx="8" fill="#fff" stroke="#EBEBEB" stroke-width="1"/>
+<circle cx="308" cy="735" r="4" fill="#3F7A3F"/>
+<text x="318" y="739" font-size="10.5" fill="#1B1B1B" font-weight="600" text-anchor="start">orchard-web #1184 · review ready</text>
+<rect x="306" y="750" width="158" height="16" rx="8" fill="#F2FCB3" stroke="none" stroke-width="1"/>
+<text x="312" y="761.5" font-size="9.5" fill="#1B1B1B" font-weight="600" text-anchor="start">recommend: request changes</text>
+<text x="306" y="784" font-size="10" fill="#1B1B1B" font-weight="400" text-anchor="start">An expired session restores a basket by id</text>
+<text x="306" y="798" font-size="10" fill="#1B1B1B" font-weight="400" text-anchor="start">without checking who owns it.</text>
+<rect x="306" y="816" width="34" height="14" rx="7" fill="#F6E3E1" stroke="none" stroke-width="1"/>
+<text x="323" y="826.06" font-size="8.5" fill="#B23B34" font-weight="700" text-anchor="middle">HIGH</text>
+<text x="346" y="827" font-size="9.5" fill="#1B1B1B" font-weight="400" text-anchor="start">src/checkout.js:14 restore id is trusted</text>
+<rect x="306" y="836" width="34" height="14" rx="7" fill="#F8EEDC" stroke="none" stroke-width="1"/>
+<text x="323" y="846.06" font-size="8.5" fill="#C9932A" font-weight="700" text-anchor="middle">MED</text>
+<text x="346" y="847" font-size="9.5" fill="#1B1B1B" font-weight="400" text-anchor="start">test/checkout.test.mjs:19 asserts 200 only</text>
+<rect x="306" y="864" width="96" height="22" rx="11" fill="#1B1B1B" stroke="#1B1B1B" stroke-width="1"/>
+<text x="354" y="878.6" font-size="10" fill="#fff" font-weight="500" text-anchor="middle">Post as comment</text>
+<rect x="408" y="864" width="88" height="22" rx="11" fill="#fff" stroke="#1B1B1B" stroke-width="1"/>
+<text x="452" y="878.6" font-size="10" fill="#1B1B1B" font-weight="500" text-anchor="middle">Apply the fixes</text>
+<text x="306" y="900" font-size="9.5" fill="#607CAA" font-weight="400" text-anchor="start">Read the full review ▸</text>
+<rect x="296" y="920" width="256" height="32" rx="16" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="310" y="940" font-size="10.5" fill="#6B6B6B" font-weight="400" text-anchor="start" font-style="italic">Tell the agent how to proceed…</text>
+<circle cx="631" cy="541" r="11" fill="#FFDC5C"/>
+<text x="631" y="545.5" font-size="12" fill="#1B1B1B" font-weight="700" text-anchor="middle">4</text>
+<text x="650" y="546" font-size="12" fill="#6B6B6B" font-weight="600" text-anchor="start">Settings decide who and what runs</text>
+<rect x="620" y="556" width="556" height="420" rx="12" fill="#fff" stroke="#BDBDBD" stroke-width="1"/>
+<rect x="632" y="564" width="108" height="24" rx="8" fill="#F0F0F0" stroke="none" stroke-width="1"/>
+<text x="644" y="580" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">Morning Brief</text>
+<rect x="746" y="564" width="143" height="24" rx="8" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="758" y="580" font-size="11" fill="#1B1B1B" font-weight="500" text-anchor="start">orchard-web #1184</text>
+<circle cx="877" cy="576" r="3.5" fill="#3F7A3F"/>
+<rect x="895" y="564" width="62" height="24" rx="8" fill="#F0F0F0" stroke="none" stroke-width="1"/>
+<text x="907" y="580" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">+</text>
+<rect x="632" y="596" width="532" height="26" rx="13" fill="#F3F3F3" stroke="none" stroke-width="1"/>
+<text x="646" y="613" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">github.com/orchard/orchard-web/pull/1184</text>
+<rect x="1090" y="599" width="66" height="20" rx="10" fill="#1B1B1B" stroke="#1B1B1B" stroke-width="1"/>
+<text x="1123" y="612.6" font-size="10" fill="#fff" font-weight="500" text-anchor="middle">Ask Dia</text>
+<line x1="620" y1="632" x2="1176" y2="632" stroke="#E3E3E3" stroke-width="1"/>
+<text x="638" y="662" font-size="11" fill="#1B1B1B" font-weight="600" text-anchor="start">Keep the unsaved harvest plan</text>
+<text x="638" y="676" font-size="11" fill="#1B1B1B" font-weight="600" text-anchor="start">when the tab reloads</text>
+<text x="638" y="692" font-size="10" fill="#6B6B6B" font-weight="400" text-anchor="start">#1184 · d-quince · 2 commits</text>
+<text x="638" y="714" font-size="10" fill="#6B6B6B" font-weight="600" text-anchor="start">Files changed  2</text>
+<rect x="638" y="722" width="222" height="114" rx="6" fill="#FBFBFB" stroke="#EBEBEB" stroke-width="1"/>
+<text x="648" y="738" font-size="9.5" fill="#6B6B6B" font-weight="400" text-anchor="start">src/checkout.js</text>
+<rect x="648" y="748" width="140" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="762" width="180" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="776" width="110" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="790" width="190" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="804" width="130" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="818" width="160" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="638" y="846" width="222" height="100" rx="6" fill="#FBFBFB" stroke="#EBEBEB" stroke-width="1"/>
+<text x="648" y="862" font-size="9.5" fill="#6B6B6B" font-weight="400" text-anchor="start">test/checkout.test.mjs</text>
+<rect x="648" y="872" width="120" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="886" width="170" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="900" width="100" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="914" width="180" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="648" y="928" width="140" height="5" rx="3" fill="#EBEBEB" stroke="none" stroke-width="1"/>
+<rect x="882" y="644" width="276" height="320" rx="12" fill="#FCFCFC" stroke="#EBEBEB" stroke-width="1"/>
+<text x="896" y="665" font-size="12" fill="#1B1B1B" font-weight="600" text-anchor="start" font-family='Georgia, "Times New Roman", serif'>Settings</text>
+<text x="1144" y="664" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="end">✕</text>
+<text x="898" y="688" font-size="9" fill="#6B6B6B" font-weight="700" text-anchor="start">REPOS ROOT</text>
+<rect x="898" y="696" width="244" height="22" rx="6" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="908" y="711" font-size="10" fill="#1B1B1B" font-weight="400" text-anchor="start">~/development</text>
+<text x="1130" y="711" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">⌄</text>
+<text x="898" y="732" font-size="9" fill="#6B6B6B" font-weight="700" text-anchor="start">GITHUB IDENTITY</text>
+<rect x="898" y="740" width="244" height="22" rx="6" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="908" y="755" font-size="10" fill="#1B1B1B" font-weight="400" text-anchor="start">octocat</text>
+<text x="1130" y="755" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">⌄</text>
+<text x="898" y="776" font-size="9" fill="#6B6B6B" font-weight="700" text-anchor="start">AGENT</text>
+<rect x="898" y="784" width="244" height="22" rx="6" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="908" y="799" font-size="10" fill="#1B1B1B" font-weight="400" text-anchor="start">claude</text>
+<text x="1130" y="799" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">⌄</text>
+<text x="898" y="820" font-size="9" fill="#6B6B6B" font-weight="700" text-anchor="start">REVIEW DEFAULT</text>
+<rect x="898" y="828" width="244" height="22" rx="6" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="908" y="843" font-size="10" fill="#1B1B1B" font-weight="400" text-anchor="start">Plan — the agent proposes; you decide</text>
+<text x="1130" y="843" font-size="11" fill="#6B6B6B" font-weight="400" text-anchor="start">⌄</text>
+<text x="898" y="864" font-size="9" fill="#6B6B6B" font-weight="700" text-anchor="start">REPOSITORIES</text>
+<rect x="898" y="872" width="77" height="18" rx="9" fill="#1B1B1B" stroke="#1B1B1B" stroke-width="1"/>
+<text x="936.5" y="884.5" font-size="9" fill="#fff" font-weight="400" text-anchor="middle">orchard-web</text>
+<rect x="981" y="872" width="77" height="18" rx="9" fill="#1B1B1B" stroke="#1B1B1B" stroke-width="1"/>
+<text x="1019.5" y="884.5" font-size="9" fill="#fff" font-weight="400" text-anchor="middle">orchard-api</text>
+<rect x="1064" y="872" width="99" height="18" rx="9" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="1113.5" y="884.5" font-size="9" fill="#6B6B6B" font-weight="400" text-anchor="middle">orchard-sensors</text>
+<text x="898" y="902" font-size="9" fill="#6B6B6B" font-weight="700" text-anchor="start">FAVORITE USERS</text>
+<rect x="898" y="910" width="61" height="18" rx="9" fill="#1B1B1B" stroke="#1B1B1B" stroke-width="1"/>
+<text x="928.5" y="922.5" font-size="9" fill="#fff" font-weight="400" text-anchor="middle">d-quince</text>
+<rect x="965" y="910" width="67" height="18" rx="9" fill="#1B1B1B" stroke="#1B1B1B" stroke-width="1"/>
+<text x="998.5" y="922.5" font-size="9" fill="#fff" font-weight="400" text-anchor="middle">m-bramley</text>
+<rect x="1038" y="910" width="61" height="18" rx="9" fill="#fff" stroke="#C9C9C9" stroke-width="1"/>
+<text x="1068.5" y="922.5" font-size="9" fill="#6B6B6B" font-weight="400" text-anchor="middle">s-pippin</text>
+<text x="898" y="940" font-size="9" fill="#6B6B6B" font-weight="700" text-anchor="start"></text>
+<rect x="898" y="948" width="12" height="12" rx="3" fill="#1B1B1B" stroke="#1B1B1B" stroke-width="1"/>
+<text x="901" y="958" font-size="9" fill="#fff" font-weight="400" text-anchor="start">✓</text>
+<text x="918" y="958" font-size="10" fill="#1B1B1B" font-weight="400" text-anchor="start">Unapproved pull requests only</text>
+<line x1="24" y1="974" x2="1176" y2="974" stroke="#E3E3E3" stroke-width="1"/>
+<text x="24" y="994" font-size="10.5" fill="#6B6B6B" font-weight="400" text-anchor="start">Every repository, author and pull request is invented. This is a drawing of how the extension would look built into Dia, not a screenshot; the panel as it runs today is in the report above.</text>
+</svg>
+<span class="wire-open">Open full size ↗</span></a></figure></section>
+<p class="caption">Figure 2. Four moments in a morning. Click it to open it full size.</p>
+<p>After that, the same machinery reaches the tab you are reading, the checks after a merge, and more of git, until every agent session on the machine is visible in the browser. That version needs the answers in section 03 first.</p>
+<table class="grid"><thead><tr><th>Choice</th><th>One way</th><th>The other</th><th>My read</th></tr></thead><tbody><tr><td>Where the list comes from</td><td>The brief: already ranked from a source that knows you; needs the feature to reach it</td><td>A separate queue: works from an extension today; duplicates the brief and stops at 100 items</td><td>The brief.</td></tr><tr><td>Extension or feature</td><td>Extension: fills the gap today, works in any Chromium browser, cannot reach the chat</td><td>Feature: closes the loop through the conversation; needs decisions about process launch, sessions and profiles</td><td>Extension until the feature exists.</td></tr><tr><td>What the brief becomes</td><td>A summary you read: calm, finished in a minute, and nothing in it changes after you close it</td><td>A place you act from: items carry a button and a live state, so the brief has to reflect what happened after you clicked</td><td>Act from it, on the items the brief already chose to show, and let it carry their state through the day.</td></tr></tbody></table>
+<p>The <a href="https://github.com/rewt/herdr-dia/blob/main/HANDOFF.md">design document</a> has the architecture, the decision records, the assumptions with a way to check each one, and the known defects.</p>
+<h2 id="05-next">05 · Next</h2>
+<p>The next step is a conversation. I would like to walk you through this against a live pull request, and then talk about where it goes. How far can agentic engineering move into the browser, and what does an orchestration product built on one look like? Does any of this fit the picture you already have for Dia, and what would you need on the infrastructure side to run it? That last question decides more than the design does. I am excited to learn more about how the team works and where an agentic engineering background can help. Let's get together and talk.</p>
+  <footer>The source of this page is <a href="https://github.com/rewt/herdr-dia/blob/main/REPORT.md">REPORT.md</a> in the repository; the engineering detail is in <a href="https://github.com/rewt/herdr-dia/blob/main/HANDOFF.md">HANDOFF.md</a>. Every repository, author and pull request in the figures is fictional.</footer>
+</article>
+</body>
+</html>

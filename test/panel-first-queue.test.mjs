@@ -1,5 +1,5 @@
 // The first dia.queue of a session. It has to carry the settings saved in the panel's storage:
-// asked with the defaults it uses the wrong GitHub identity and no favourites, and that answer
+// asked with the defaults it uses the wrong GitHub identity and no favorites, and that answer
 // stands on screen until the 20s tick finally replaces it.
 
 import test from 'node:test';
@@ -51,7 +51,7 @@ test('the first queue carries the saved settings, not the defaults', () => {
   const first = panel.requestsFor('dia.queue')[0];
   assert.ok(first, 'a queue was actually asked for');
   assert.equal(first.params.ghConfigDir, '/Users/someone/.config/gh-work', 'the saved GitHub identity');
-  assert.deepEqual(first.params.favorites, ['alice'], 'the saved favourites — or the tier comes back empty');
+  assert.deepEqual(first.params.favorites, ['alice'], 'the saved favorites — or the tier comes back empty');
   assert.deepEqual(first.params.repos, ['herdr-dia'], 'the saved repo filter');
   assert.equal(first.params.onlyUnapproved, false, 'the saved unapproved toggle');
 });
